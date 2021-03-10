@@ -12,7 +12,7 @@ from transformers import BertTokenizer, BertModel
 from models import ProtProtModel, Bert_Classifier
 from trainer import Trainer
 from utils import *
-
+# 111
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser()
 	parser.add_argument('--seed', type=int, default=42)
