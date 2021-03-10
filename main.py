@@ -28,7 +28,7 @@ if __name__ == '__main__':
 		['supt_conf', 'bert_cls', 'prot_prot', 'kgbert'])
 	parser.add_argument('--ent_per_con', type=int, default=4)
 	parser.add_argument('--typicalness', type=str, default='none', choices = ['none', 'w_ent', 'max_label', 'sum_label'])
-	parser.add_argument('--cvsample', default=False, action = 'store_true') # cv = cross validation
+	#parser.add_argument('--cvsample', default=False, action = 'store_true') # cv = cross validation
 	parser.add_argument('--language', type=str, default='zh', choices = ['zh', 'en'])
 	parser.add_argument('--evaluate_threshold', type=float, default=0.5)
 	parser.add_argument('--con_desc', default=False, action = 'store_true') # use description of concept
