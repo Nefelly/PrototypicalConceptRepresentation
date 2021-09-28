@@ -1,4 +1,4 @@
-# PrototypicalConceptRepresentation
+# Prototypical Concept Representation
 
 Source code for paper Prototypical Concept Representation
 
@@ -26,14 +26,14 @@ The arguments are as following:
 * `--model_lr`: learning rate of other parameters.
 * `--batch_size`: batch size used in training.
 * `--weight_decay`: weight dacay rate used in training.
-* `--load_path`: path of PSN checkpoint.
+* `--load_path`: path of PSN checkpoint to load.
 * `--data`: name of the dataset, either 'PB16I' or 'PB16IC'.
 * `--plm`: choice of BERT of different size. Choose from 'bert', 'bert_tiny', 'bert_mini' and 'bert_small'.
 * `--model`: name of the model. Use 'psn' for Prototypical Siamese Network, or 'prot_vanilla' for a model with vanilla prototype.
 * `--ent_per_con`: the hyperparameter $\eta$, default to 4. Each triple samples at most $2*\eta$ instances.
 * `--con_desc`: use descriptions of concepts for representation. Only suitable for PB16IC.
 * `--train_instance_of`: use isInstanceOf triples as additional training data of isSubclassOf relation.
-* `--variant`: use 'selfatt' for the self-attention variant.
+* `--variant`: choose 'selfatt' for the self-attention variant.
 * `--type_constrain`: apply type constrain in link prediction.
 * `--test_link_prediction`: test link prediction when a checkpoint is loaded.
 * `--test_triple_classification`: test triple classification when a checkpoint is loaded.
@@ -43,6 +43,10 @@ The arguments are as following:
 * `--distance_metric`: use distance-based metric like TransE to model isA relations, instead of a classifier. Necessary to reimplement KEPLER.
 
 
-### Load Representations of Concepts and Instances
+### Datasets
 
-We release the trained representations of concepts and instances for related tasks. 
+The datasets are put in the folder PB16I or PB16IC, including concepts, instances, isSubclassOf triples, isInstanceOf triples, textual descriptions of instances.
+
+### Representations of Concepts and Instances
+
+We release the trained representations of concepts and instances for related tasks, which are saved in concept_prototypes.pt and instance_embddings.pt, in the folder PB16I or PB16IC. 
