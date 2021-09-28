@@ -13,7 +13,9 @@ Source code for paper Prototypical Concept Representation
 
 ## Usage
 
-Run main.py to train or test Prototypical Siamese Network. An example for training:
+Run main.py to train or test Prototypical Siamese Network (PSN). 
+
+An example for training:
 
 ```bash
 python main.py --train_instance_of --plm bert_tiny --data 16_condesc 
@@ -22,13 +24,13 @@ python main.py --train_instance_of --plm bert_tiny --data 16_condesc
 The arguments are as following:
 * `--bert_lr`: learning rate of BERT.
 * `--model_lr`: learning rate of other parameters.
-* `--batch_size`: batch size.
-* `--weight_decay`: weight dacay.
+* `--batch_size`: batch size used in training.
+* `--weight_decay`: weight dacay rate used in training.
 * `--load_path`: path of PSN checkpoint.
-* `--data`: name of the dataset, either PB16I or PB16IC.
-* `--plm`: choice of BERT of different size. Choose from bert, bert_tiny, bert_mini and bert_small.
-* `--model`: name of the model. Use psn for Prototypical Siamese Network, or prot_vanilla for a model with vanilla prototype.
-* `--ent_per_con`: the hyperparameter eta, default to 4. Each triple samples at most 2*eta instances.
+* `--data`: name of the dataset, either 'PB16I' or 'PB16IC'.
+* `--plm`: choice of BERT of different size. Choose from 'bert', 'bert_tiny', 'bert_mini' and 'bert_small'.
+* `--model`: name of the model. Use 'psn' for Prototypical Siamese Network, or 'prot_vanilla' for a model with vanilla prototype.
+* `--ent_per_con`: the hyperparameter $\eta$, default to 4. Each triple samples at most $2*\eta$ instances.
 * `--con_desc`: use descriptions of concepts for representation. Only suitable for PB16IC.
 * `--train_instance_of`: use isInstanceOf triples as additional training data of isSubclassOf relation.
 * `--variant`: use 'selfatt' for the self-attention variant.
