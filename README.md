@@ -18,7 +18,7 @@ Run main.py to train or test Prototypical Siamese Network (PSN).
 An example for training:
 
 ```bash
-python main.py --train_instance_of --plm bert_tiny --data 16_condesc 
+python main.py --train_instance_of --plm bert_tiny --data 16_condesc --type_constrain
 ```
 
 The arguments are as following:
@@ -37,7 +37,7 @@ The arguments are as following:
 * `--type_constrain`: apply type constrain in link prediction.
 * `--test_link_prediction`: test link prediction when a checkpoint is loaded.
 * `--test_triple_classification`: test triple classification when a checkpoint is loaded.
-* `--freeze_plm`: replace BERT with learnable embeddings.
+* `--freeze_plm`: don't use textual descriptions, and replace BERT encoding with learnable embeddings.
 * `--separate_classifier`: use different classifier for isSubclassOf and isInstanceOf relations.
 * `--train_MLM`: apply an aditional Masked Langauge Modeling (MLM) loss on textual descriptions. Necessary to reimplement KEPLER.
 * `--distance_metric`: use distance-based metric like TransE to model isA relations, instead of a classifier. Necessary to reimplement KEPLER.
