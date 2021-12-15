@@ -15,7 +15,7 @@ import numpy as np
 
 save_folder = './params/'
 
-add_concept_hint = False#True#False#True# True#False#
+add_concept_hint = True#False#True# True#False#
 trainable_models = ['psn', 'prot_vanilla']
 
 gradual_epochs = 0.001
@@ -27,7 +27,7 @@ else:
 	max_length = 400
 	sample_limit = 1000000000
 
-distance_margin = 9#0#Prototypical Network 9 # Following KEPLER‘’
+distance_margin = 9 # Following KEPLER‘’
 distance_eps = 1e-10
 
 class Trainer:
@@ -208,7 +208,7 @@ class Trainer:
 				pdb.set_trace()
 		else:
 			pass
-			
+			#self.use_statistic()
 
 	def train(self):
    
@@ -317,24 +317,10 @@ class Trainer:
 			count_instance = 0
 			count_instance_selfatt = 0
 
-			for bt, batch in tqdm(enumerate(batch_list)):
+			for bt, batch in enumerate(batch_list):
 				triple = dataset[batch[0]]
 				hypo, hyper, label = triple
 
-				if hyper not in concepts:
-					pdb.set_trace()
-				
-				hyper_ents = sampler.sample_single(hyper, exclude_ins = hypo)
-				if (len(hyper_ents) == 0):
-					continue
-				if hypo in concepts: # subclass
-					rel_type = 'subclass_selfatt'
-					count_subclass_selfatt += 1
-				else: # 
-					rel_type = 'instance_selfatt'
-					count_instance_selfatt += 1
-				#pdb.set_trace()
-				'''
 				if hypo in concepts and hyper in concepts:
 					hypo_ents, hyper_ents = sampler.sample(hypo, hyper)
 
@@ -355,20 +341,20 @@ class Trainer:
 						if (len(hypo_ents) == 0):
 							continue
 
+
 					if hyperparams['variant'] == 'selfatt' or (hyperparams['variant'] == 'hybrid' and random.sample(range(10), 1)[0] > 5):
 						rel_type = 'instance_selfatt'
 						count_instance_selfatt += 1
 					else:
 						rel_type = 'instance'
 						count_instance += 1
+
 				else:
 					print('Wrong')
-				'''
 
 				
 				if self.model_name in trainable_models:
 					# train subclass of
-					'''
 					if not hyperparams['con_desc']: # 不使用概念本身的描述，即使用实例的描述
 						if not hyperparams['freeze_plm']:
 							if rel_type not in  ['subclass_selfatt', 'instance_selfatt']:
@@ -394,8 +380,6 @@ class Trainer:
 							inputs.to(device)
 							embeddings = model.bert_embed(**inputs)
 						else:
-							pdb.set_trace()
-							
 							insts = []
 							if hypo in instances:
 								insts += [hypo]
@@ -407,8 +391,7 @@ class Trainer:
 								insts += [ e['ins_name'] for e in hyper_ents]
 							insts_idx = torch.tensor([ self.ins2id[ins]  for ins in insts]).to(device)
 							embeddings = model.frozen_bert_embed(insts_idx)
-							
-						
+	
 						if rel_type in ['subclass', 'subclass_selfatt']:
 							hypo_embeddings = embeddings[:len(hypo_ents)]
 							hyper_embeddings = embeddings[len(hypo_ents):]
@@ -450,22 +433,7 @@ class Trainer:
 							else:
 								hypo_idx  = torch.tensor([self.con2id[hypo ]]).to(device)
 								hypo_embeddings = model.frozen_bert_embed_concepts(hypo_idx)
-					'''
-					hypo_hint = single_hint_template.format(hypo) if add_concept_hint else ''
-					hyper_hint = single_hint_template.format(hyper) if add_concept_hint else ''
-
-					hyper_texts = [  hyper_hint + e[text_key] for e in hyper_ents]
-
-					if hypo in instances:
-						hypo_texts = [instance_info[hypo][text_key]]
-					else:
-						hypo_texts = [concept_info[hypo]]
-					texts = hypo_texts + hyper_texts
-					inputs = tokenizer(texts, truncation = True, max_length = max_length, return_tensors='pt', padding=True )
-					inputs.to(device)
-					embeddings = model.bert_embed(**inputs)
-					hypo_embeddings = embeddings[:1]
-					hyper_embeddings = embeddings[1:]
+			   
 						
 
 					if rel_type not in  ['subclass_selfatt', 'instance_selfatt']:
@@ -526,14 +494,18 @@ class Trainer:
 
 					optimizer.zero_grad()
 					loss.backward()
+					#grads = [ p.grad.norm() for p in model.parameters() if p.grad != None]
+					#clip_grad_norm_(model.parameters(), max_norm=2, norm_type=2)
 					#pdb.set_trace()
+					#print([p.grad for n, p in model.named_parameters()][1].sum())
 					optimizer.step()
 				 
 				count_step += 1
 
 
 			time_2 = time.time()
-
+			#assert count_subclass + count_subclass_selfatt == len(dataset_sub)
+			#assert count_instance + count_instance_selfatt == len(dataset_ins)
 
 			avg_loss = { 'subclass': total_loss['subclass'] / count_subclass if count_subclass > 0 else 0, 
 				'instance': total_loss['instance'] / count_instance if count_instance > 0 else 0, 
@@ -645,9 +617,6 @@ class Trainer:
 		sampler = Sampler(concept_instance_info, self.instance_info, hyperparams['typicalness'], ent_per_con, 'test', fixed_num_insts)
 		concept_info = self.concept_info
 
-		instance_info = self.instance_info
-		instances = instance_info.keys()
-
 		with torch.no_grad():
 			if valid:
 
@@ -700,7 +669,7 @@ class Trainer:
 
 				triple = dataset[batch[0]]
 				hypo, hyper, label = triple
-				#hypo_ents, hyper_ents = sampler.sample(hypo, hyper)
+				hypo_ents, hyper_ents = sampler.sample(hypo, hyper)
 
 				
 				'''
@@ -710,19 +679,9 @@ class Trainer:
 				hypo_ents =  [ self.instance_info[ent] for ent in hypo_ent_names]
 				hyper_ents =  [ self.instance_info[ent] for ent in hyper_ent_names]
 				'''
-
-				hyper_ents = sampler.sample_single(hyper, exclude_ins = hypo)
-				if (len(hyper_ents) == 0):
-					pdb.set_trace()
-					continue
-				if hypo in concepts: # subclass
-					rel_type = 'subclass_selfatt'
-					#count_subclass_selfatt += 1
-				else: # 
-					pdb.set_trace()
 				
 				if self.model_name in trainable_models:
-					'''
+
 					if not hyperparams['con_desc']:
 						if not hyperparams['freeze_plm']:
 							if selfatt == False:
@@ -767,23 +726,6 @@ class Trainer:
 
 							hypo_idx  = torch.tensor([self.con2id[hypo ]]).to(device)
 							hypo_embeddings = model.frozen_bert_embed_concepts(hypo_idx)
-					'''
-					hypo_hint = single_hint_template.format(hypo) if add_concept_hint else ''
-					hyper_hint = single_hint_template.format(hyper) if add_concept_hint else ''
-
-					hyper_texts = [  hyper_hint + e[text_key] for e in hyper_ents]
-
-					if hypo in instances:
-						hypo_texts = [instance_info[hypo][text_key]]
-					else:
-						hypo_texts = [concept_info[hypo]]
-					texts = hypo_texts + hyper_texts
-					inputs = tokenizer(texts, truncation = True, max_length = max_length, return_tensors='pt', padding=True )
-					inputs.to(device)
-					embeddings = model.bert_embed(**inputs)
-					hypo_embeddings = embeddings[:1]
-					hyper_embeddings = embeddings[1:]
-
 
 					if selfatt == False:
 						res = model(hypo_embeddings, hyper_embeddings, hypo, hyper, mode = 'subclass')
@@ -995,13 +937,12 @@ class Trainer:
 				if hypo in instances:
 					hyper_ents = sampler.sample_single(hyper, exclude_ins = hypo)
 				elif hyper in instances:
-					pdb.set_trace()
 					hypo_ents = sampler.sample_single(hypo, exclude_ins = hyper)
 				else:
 					pdb.set_trace()
 
 				if self.model_name in trainable_models:
-					'''
+
 					if not hyperparams['con_desc']:
 						if not hyperparams['freeze_plm']:
 							if selfatt == False:
@@ -1076,24 +1017,6 @@ class Trainer:
 							else:
 								hypo_idx  = torch.tensor([self.con2id[hypo ]]).to(device)
 								hypo_embeddings = model.frozen_bert_embed_concepts(hypo_idx)
-					'''
-					hypo_hint = single_hint_template.format(hypo) if add_concept_hint else ''
-					hyper_hint = single_hint_template.format(hyper) if add_concept_hint else ''
-
-					hyper_texts = [  hyper_hint + e[text_key] for e in hyper_ents]
-
-					if hypo in instances:
-						hypo_texts = [instance_info[hypo][text_key]]
-					else:
-						pdb.set_trace()
-						hypo_texts = [concept_info[hypo]]
-					texts = hypo_texts + hyper_texts
-					inputs = tokenizer(texts, truncation = True, max_length = max_length, return_tensors='pt', padding=True )
-					inputs.to(device)
-					embeddings = model.bert_embed(**inputs)
-					hypo_embeddings = embeddings[:1]
-					hyper_embeddings = embeddings[1:]
-
 
 					if selfatt == False:
 						res = model(hypo_embeddings, hyper_embeddings, hypo, hyper, mode = 'instance')
@@ -1210,12 +1133,11 @@ class Trainer:
 		#pdb.set_trace()
 		embeddings = self.generate_concept_prototype()
 
-		#with open('embeddings.pkl', 'rb') as fil:
-		#	embeddings = pickle.load(fil)
-		
+		with open('embeddings.pkl', 'rb') as fil:
+			embeddings = pickle.load(fil)
+
 		instance_embeddings = embeddings['instance_embeddings'].to(device)
 		concept_prototypes = embeddings['concept_prototypes'].to(device)
-		concept_embeddings = embeddings['concept_embeddings'].to(device)
 
 		#batch_size = 16
 		id2con = self.id2con
@@ -1352,10 +1274,7 @@ class Trainer:
 								count_triples += len(testees)
 								if given_type == 'concept':
 									igiv = con2id[giv]
-									if target == 'head': # so given is tail(hyper)
-										prototype = concept_prototypes[igiv]
-									else: # given is head(hypo)
-										prototype = concept_embeddings[igiv]
+									prototype = concept_prototypes[igiv]
 								else:
 									igiv = ins2id[giv]
 									if type_constrain:
@@ -1367,11 +1286,7 @@ class Trainer:
 									
 									if target_type == 'concept':
 										candidate_idxs = Candidates[rel][target]#[ con2id[c] for c in Candidates[rel][target]]
-										if target == 'tail':
-											all_candidates = concept_prototypes[candidate_idxs]
-										else:
-											all_candidates = concept_embeddings[candidate_idxs]
-
+										all_candidates = concept_prototypes[candidate_idxs]
 										target_size = len(candidate_idxs)
 									elif target_type == 'instance':
 										candidate_idxs = Candidates[rel][target]#[ ins2id[c] for c in Candidates[rel][target]]
@@ -1390,11 +1305,8 @@ class Trainer:
 									'''
 									
 								else:
-									pdb.set_trace()
-									if target == 'tail':
-										all_candidates = torch.cat([concept_prototypes, instance_embeddings], dim=0)
-									else:
-										all_candidates = torch.cat([concept_embeddings, instance_embeddings], dim=0)
+									#pdb.set_trace()
+									all_candidates = torch.cat([concept_prototypes, instance_embeddings], dim=0)
 									target_size = len(concepts) + len(instances)
 
 								#if target == 'head':
@@ -1403,7 +1315,6 @@ class Trainer:
 								#    feature_tensors = [concept_prototypes, prototype.expand(len(concepts), prototype_size), concept_prototypes - prototype, concept_prototypes * prototype]
 								
 								if not hyperparams['distance_metric']:
-									pdb.set_trace()
 									if target == 'head':
 										feature_tensors = [prototype.expand(target_size, prototype_size), all_candidates, prototype - all_candidates, prototype * all_candidates]
 									else:
@@ -1428,14 +1339,14 @@ class Trainer:
 								else:
 									
 									if rel == 'subclass':
-										rel_embedding = 0#model.isA_embedding(torch.tensor(0).to(device))
+										rel_embedding = model.isA_embedding(torch.tensor(0).to(device))
 									else:
-										rel_embedding = 0#model.isA_embedding(torch.tensor(1).to(device))
+										rel_embedding = model.isA_embedding(torch.tensor(1).to(device))
 									if target == 'head':
 										feature_tensors = all_candidates + rel_embedding - prototype
 									else:
 										feature_tensors = prototype + rel_embedding - all_candidates
-									distance = torch.norm(feature_tensors, p=2, dim=-1) #feature_tensors.abs().sum(dim=1)
+									distance = torch.norm(feature_tensors, p=1, dim=-1) #feature_tensors.abs().sum(dim=1)
 									#pdb.set_trace()
 									score = -distance 
 									tops = score.argsort(descending=True).tolist()
@@ -1631,7 +1542,6 @@ class Trainer:
 		concept_info = self.concept_info
 
 		concept_prototypes = torch.zeros(len(concepts), prototype_size).float()
-		concept_embeddings = torch.zeros(len(concepts), prototype_size).float() # For Prototypical Network
 		instance_embeddings = torch.zeros(len(instances), prototype_size).float()
 
 		batch_size = 128
@@ -1640,40 +1550,14 @@ class Trainer:
 
 
 		with torch.no_grad():
-			# Embedding concepts 
-			random_map = [i for i in range(num_concepts)]
-			batch_list = [ random_map[i:i+batch_size] for i in range(0, num_concepts ,batch_size)] 
-
-			#pdb.set_trace()
-			for batch in batch_list:
-				cons = [ self.id2con[i] for i in batch]
-				if not hyperparams['freeze_plm']:
-					texts = [ (single_hint_template.format(con) if add_concept_hint else '') + self.concept_info[con] for con in cons]
-
-					inputs = tokenizer(texts, truncation = True, max_length = max_length, return_tensors='pt', padding=True )
-					inputs.to(device)
-					embeddings = model.bert_embed(**inputs)
-
-					# At test time, such operation is not needed . Because It gets identical results.
-					#embeddings_ = torch.zeros(embeddings.shape)
-					#for ie, embedding in enumerate(embeddings):
-					#    pdb.set_trace()
-					#    emb = embedding.unsqueeze(0)
-					#    res = model(emb, emb, mode = 'instance_selfatt')
-					#    embeddings_[ie] = res['prototype'].cpu()
-
-				else:
-					pdb.set_trace()
-
-				concept_embeddings[batch] = embeddings.cpu()
-
-
 			random_map = [i for i in range(num_instances)]
 			batch_list = [ random_map[i:i+batch_size] for i in range(0, num_instances ,batch_size)] 
 
+			
 			for batch in batch_list:
 				insts = [ self.id2ins[i] for i in batch]
 				if not hyperparams['freeze_plm']:
+					
 					texts = [ (single_hint_template.format(ins) if add_concept_hint else '') + self.instance_info[ins][text_key] for ins in insts]
 
 					inputs = tokenizer(texts, truncation = True, max_length = max_length, return_tensors='pt', padding=True )
@@ -1777,7 +1661,6 @@ class Trainer:
 		embeddings = {
 			'instance_embeddings': instance_embeddings,
 			'concept_prototypes': concept_prototypes,
-			'concept_embeddings': concept_embeddings,
 			'id2con': self.id2con,
 			'id2ins': self.id2ins
 		}
@@ -1786,7 +1669,7 @@ class Trainer:
 		with open('embeddings.pkl', 'wb') as fil:
 			pickle.dump(embeddings, fil)
 
-		#pdb.set_trace()
+		pdb.set_trace()
 		return embeddings
 
 	def get_best_threshold(self, scores, labels):

@@ -192,7 +192,7 @@ class ProtSiam(nn.Module):
             distance = torch.norm(offset, p=1, dim = -1) #offset.abs().sum() # L1距离
             res = {'distance': distance}
 
-        #torch.set_printoptions(precision=6)
+        torch.set_printoptions(precision=6)
         #pdb.set_trace()
 
         return res
@@ -211,11 +211,10 @@ class ProtSiam(nn.Module):
                 rel_embedding = self.isA_embedding(torch.tensor(1).to(self.bert.device))
             else:
                 rel_embedding = self.isA_embedding(torch.tensor(0).to(self.bert.device))
-            #offset = (hypo_prototype + rel_embedding - hyper_prototype)
-            offset = (hypo_prototype - hyper_prototype) # prototypical network
+            offset = (hypo_prototype + rel_embedding - hyper_prototype)
             #pdb.set_trace()
 
-            distance = torch.norm(offset, p=2, dim = -1) # offset.abs().sum()
+            distance = torch.norm(offset, p=1, dim = -1) # offset.abs().sum()
             res = {'distance': distance}
 
         return res
