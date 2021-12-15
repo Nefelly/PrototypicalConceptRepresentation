@@ -1131,7 +1131,8 @@ class Trainer:
 		type_constrain = self.hyperparams['type_constrain']
 		
 		#pdb.set_trace()
-		embeddings = self.generate_concept_prototype()
+
+		#embeddings = self.generate_concept_prototype()
 
 		with open('embeddings.pkl', 'rb') as fil:
 			embeddings = pickle.load(fil)
@@ -1152,6 +1153,7 @@ class Trainer:
 			id2ins = { (k+num_concepts): v for k, v in id2ins.items()}
 			ins2id = { k: (v+num_concepts) for k, v in ins2id.items()}
 
+		sampler = Sampler(concept_instance_info, self.instance_info, hyperparams['typicalness'], hyperparams['ent_per_con'], 'train', False)
 
 		Candidates = { 'subclass': { 'head': set(), 'tail': set()},
 					   'instance': { 'head': set(), 'tail': set()}
@@ -1262,7 +1264,7 @@ class Trainer:
 
 
 						count_triples = 0
-						for giv in givens:        
+						for giv in tqdm(givens):        
 							testees = Groundtruth[rel][target]['test'][giv]
 							groundtruth = Groundtruth[rel][target]['all'][giv]#.union(Groundtruth[rel][target]['test'][giv])
 							#assert(groundtruth == Groundtruth[rel][target]['all'][giv])
@@ -1283,7 +1285,6 @@ class Trainer:
 										prototype = instance_embeddings[igiv-num_concepts]
 
 								if type_constrain:
-									
 									if target_type == 'concept':
 										candidate_idxs = Candidates[rel][target]#[ con2id[c] for c in Candidates[rel][target]]
 										all_candidates = concept_prototypes[candidate_idxs]
@@ -1315,6 +1316,58 @@ class Trainer:
 								#    feature_tensors = [concept_prototypes, prototype.expand(len(concepts), prototype_size), concept_prototypes - prototype, concept_prototypes * prototype]
 								
 								if not hyperparams['distance_metric']:
+									for candidate_idx in candidate_idxs:
+										if target_type == 'concept':
+											cand = id2con[candidate_idx]
+										else:
+											cand = id2ins[candidate_idx]
+										
+										if target == 'head':
+											hypo = cand 
+											hyper = giv 
+										else:
+											hypo = giv 
+											hyper = cand 
+
+										if hypo in concepts and hyper in concepts:
+											hypo_ents, hyper_ents = sampler.sample(hypo, hyper)
+
+											if hyperparams['variant'] == 'selfatt':
+												rel_type = 'subclass_selfatt'
+											else:
+												rel_type = 'subclass'
+										elif hypo in instances or hyper in instances:
+											if hypo in instances:
+												hyper_ents = sampler.sample_single(hyper, exclude_ins = hypo)
+												if (len(hyper_ents) == 0):
+													continue
+											else:
+												hypo_ents = sampler.sample_single(hypo, exclude_ins = hyper)
+												if (len(hypo_ents) == 0):
+													continue
+											if hyperparams['variant'] == 'selfatt':
+												rel_type = 'instance_selfatt'
+											else:
+												rel_type = 'instance'
+
+										
+
+										if rel_type in ['subclass', 'subclass_selfatt']:
+											hypo_embs = [  instance_embeddings[ins2id[e['ins_name']]].unsqueeze(0) for e in hypo_ents]
+											hyper_embs = [ instance_embeddings[ins2id[e['ins_name']]].unsqueeze(0)  for e in hyper_ents]
+										elif hypo in instances:
+											hypo_embs = [  instance_embeddings[ins2id[hypo]].unsqueeze(0) ]
+											hyper_embs = [ instance_embeddings[ins2id[e['ins_name']]].unsqueeze(0)  for e in hyper_ents]
+										elif hyper in instances:
+											hypo_embs = [  instance_embeddings[ins2id[e['ins_name']]].unsqueeze(0) for e in hypo_ents]
+											hyper_embs = [  instance_embeddings[ins2id[hyper]].unsqueeze(0) ]
+
+										hypo_embeddings = torch.cat(hypo_embs, dim=0)
+										hyper_embeddings = torch.cat(hyper_embs, dim=0)
+										res = model(hypo_embeddings, hyper_embeddings, hypo, hyper, mode = rel_type)
+
+	
+									
 									if target == 'head':
 										feature_tensors = [prototype.expand(target_size, prototype_size), all_candidates, prototype - all_candidates, prototype * all_candidates]
 									else:
@@ -1333,7 +1386,7 @@ class Trainer:
 											sub_pred = model.ins_classifier(torch.cat(feature_tensors, dim=-1)).squeeze()
 										else:
 											sub_pred = model.sub_classifier(torch.cat(feature_tensors, dim=-1)).squeeze()
-
+									
 									score = sub_pred.softmax(dim=-1)[:,1]
 									tops = score.argsort(descending=True).tolist()
 								else:
