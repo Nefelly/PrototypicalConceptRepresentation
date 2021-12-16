@@ -41,18 +41,12 @@ def clip_grad_norm_(parameters, max_norm, norm_type=2):
 			param_norm = p.grad.data.norm(norm_type)
 			total_norm += param_norm ** norm_type
 		total_norm = total_norm ** (1. / norm_type)
-		#grads = sum([ p.grad.norm() for p in parameters])
 
 	clip_coef = max_norm / (total_norm + 1e-6)
 
 	if clip_coef < 1:
-		#print('clip_coef < 1', clip_coef)
-		#print('Before , my sum ',sum([ p.grad.norm() for p in parameters]))
-		#pdb.set_trace()
 		for p in parameters:
-			#print('before ', p.grad.norm() )
 			p.grad.data.mul_(clip_coef)
-			#print('after  ', p.grad.norm() )
 
 		total_norm = 0
 		for p in parameters:
@@ -62,7 +56,6 @@ def clip_grad_norm_(parameters, max_norm, norm_type=2):
 		print('After ',sum([ p.grad.norm() for p in parameters]), total_norm)
 	else:
 		print('No clip ', total_norm)
-		#print('clip_coef ', clip_coef)
 	return total_norm
 
 
@@ -112,9 +105,8 @@ def cover_split(isSubclassOf_triples, concepts, num_train_triples=-1):
 		else:
 			test_triples.append(triple)
 
-	#pdb.set_trace()
 	num_diff = max(num_train_triples - len(train_triples), 0)
-	#pdb.set_trace()
+
 	random.shuffle(test_triples)
 	train_triples = train_triples + test_triples[:num_diff]
 	test_triples = test_triples[num_diff:]
@@ -126,3 +118,132 @@ def cover_split(isSubclassOf_triples, concepts, num_train_triples=-1):
 	print('Num Train Triples {0} Valid Triples {1} Test Triples {2}'.format(len(train_triples), len(valid_triples), len(test_triples)))
 	return train_triples, valid_triples, test_triples
 
+
+def load_data(folder_path):
+	isSubclassOf_triples = []
+	isInstanceOf_triples = []
+	concepts = set()
+	instances = set()
+	subclass_train = []
+	subclass_valid = []
+	subclass_test = []
+	concept_info = {}
+	concept_instance_info = {}
+	instance_info = {}
+	instance_train = []
+	instance_valid = []
+	instance_test = []
+	negative_isSubclassOf_triples = []
+	negative_isInstanceOf_triples = []
+
+	with open(folder_path + '/concepts.txt', 'r') as f:
+		for line in f.readlines()[1:]:
+			line = line.strip('\n')
+			concepts.add(line)
+
+	with open(folder_path + '/instances.txt', 'r') as f:
+		for line in f.readlines()[1:]:
+			line = line.strip('\n')
+			instances.add(line)
+
+	if os.path.exists(folder_path + '/description_concepts.txt'):
+		with open(folder_path + '/description_concepts.txt', 'r') as f:
+			for line in f.readlines():
+				assert len(line.split('\t')) == 2
+				item, desc = line.split('\t')
+				concept_info[item] = desc
+	else:
+		concept_info = None
+
+	with open(folder_path + '/description_instances.txt', 'r') as f:
+		for line in f.readlines():
+			assert len(line.split('\t')) == 2
+			item, desc = line.split('\t')
+			instance_info[item] = { 'ins_name': item, 'text_from_wikipedia': desc}
+
+	with open(folder_path + '/instances_of_concepts.txt', 'r') as f:
+		for line in f.readlines():
+			con, insts = line.split('\t')
+			insts = insts.split(',')[:-1]
+			concept_instance_info[con] = insts 
+
+	with open(folder_path + '/subclass_all.txt', 'r') as f:
+		for line in f.readlines()[1:]:
+			line = line.strip('\n')
+			hypo, rel, hyper = line.split('\t')
+			isSubclassOf_triples.append((hypo, hyper, 1))
+
+	with open(folder_path + '/subclass_train.txt', 'r') as f:
+		for line in f.readlines()[1:]:
+			line = line.strip('\n')
+			hypo, rel, hyper = line.split('\t')
+			subclass_train.append((hypo, hyper, 1))
+
+	with open(folder_path + '/subclass_valid.txt', 'r') as f:
+		for line in f.readlines()[1:]:
+			line = line.strip('\n')
+			hypo, rel, hyper = line.split('\t')
+			subclass_valid.append((hypo, hyper, 1))
+
+	with open(folder_path + '/subclass_test.txt', 'r') as f:
+		for line in f.readlines()[1:]:
+			line = line.strip('\n')
+			hypo, rel, hyper = line.split('\t')
+			subclass_test.append((hypo, hyper, 1))
+
+	with open(folder_path + '/subclass_neg.txt', 'r') as f:
+		for line in f.readlines()[1:]:
+			line = line.strip('\n')
+			hypo, rel, hyper = line.split('\t')
+			negative_isSubclassOf_triples.append((hypo, hyper, 0))
+	
+	with open(folder_path + '/instance_all.txt', 'r') as f:
+		for line in f.readlines()[1:]:
+			line = line.strip('\n')
+			hypo, rel, hyper = line.split('\t')
+			isInstanceOf_triples.append((hypo, hyper, 1))
+
+	with open(folder_path + '/instance_train.txt', 'r') as f:
+		for line in f.readlines()[1:]:
+			line = line.strip('\n')
+			hypo, rel, hyper = line.split('\t')
+			instance_train.append((hypo, hyper, 1))
+
+	with open(folder_path + '/instance_valid.txt', 'r') as f:
+		for line in f.readlines()[1:]:
+			line = line.strip('\n')
+			hypo, rel, hyper = line.split('\t')
+			instance_valid.append((hypo, hyper, 1))
+
+	with open(folder_path + '/instance_test.txt', 'r') as f:
+		for line in f.readlines()[1:]:
+			line = line.strip('\n')
+			hypo, rel, hyper = line.split('\t')
+			instance_test.append((hypo, hyper, 1))
+
+	with open(folder_path + '/instance_neg.txt', 'r') as f:
+		for line in f.readlines()[1:]:
+			line = line.strip('\n')
+			hypo, rel, hyper = line.split('\t')
+			negative_isInstanceOf_triples.append((hypo, hyper, 0))
+
+
+	data_bundle = {
+        'isSubclassOf_triples': isSubclassOf_triples,  # all positive samples of isSubclassOf
+        'isInstanceOf_triples': isInstanceOf_triples, # all positive samples of isInstanceOf
+        'concepts': concepts, #all concepts
+        'instances': instances, # all instances
+        'subclass_train': subclass_train, # isSubclassOf samples for train
+        'subclass_valid': subclass_valid,
+        'subclass_test': subclass_test,
+        'concept_info': concept_info, # description of concepts 
+        'concept_instance_info': concept_instance_info, # key: concept，value: a list of its instances
+        'instance_info': instance_info, # description of instances
+        'instance_train': instance_train, # isInstanceOf samples for train
+        'instance_valid': instance_valid,
+        'instance_test':instance_test,
+        'negative_isSubclassOf_triples': negative_isSubclassOf_triples, # randomly constructed negative samples of isSubclassOf
+        'negative_isInstanceOf_triples':negative_isInstanceOf_triples,
+    }
+
+	return data_bundle

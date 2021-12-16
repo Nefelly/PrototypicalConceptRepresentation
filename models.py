@@ -5,13 +5,13 @@ import torch
 from torch import nn
 from torch.nn import CrossEntropyLoss, MSELoss
 import numpy as np
-#import pandas as pd
+import pandas as pd
 import pickle
 import random
-#from sklearn.metrics import roc_curve
+from sklearn.metrics import roc_curve
 
-include_radius = False#True#False#True #False
-include_distance = False#True#False#True
+include_radius = False
+include_distance = False
 learn_prototype = False
 
 
@@ -33,11 +33,11 @@ class ProtSiam(nn.Module):
         self.distance_metric = distance_metric
 
         self.bert = bert
-        #self.threshold = nn.Parameter(torch.tensor(10.0), requires_grad=True) # 设成10，因为欧几里得距离一般在1e1 - 1e2，设太小一开始跳不出循环
+        #self.threshold = nn.Parameter(torch.tensor(10.0), requires_grad=True)
         self.dropout = nn.Dropout(self.config.hidden_dropout_prob)
 
         self.activation = nn.Tanh()
-        #self.classifier = nn.Linear(self.config.hidden_size * num_sample_hypo, num_labels)
+
 
         additional_dims = 0
         if include_distance:
@@ -49,18 +49,15 @@ class ProtSiam(nn.Module):
         self.alpha_prototype = 0
         self.learned_prototypes = nn.Parameter(torch.randn(len(concepts), self.prototype_size), requires_grad=learn_prototype)
         
-        self.sub_classifier = nn.Linear(self.config.hidden_size * 4 + additional_dims, num_labels) #self.config.hidden_size * 4 +
-        #self.ins_classifier = nn.Linear(self.config.hidden_size * 4 + additional_dims, num_labels)
+        self.sub_classifier = nn.Linear(self.config.hidden_size * 4 + additional_dims, num_labels) 
+        if separate_classifier:
+            self.ins_classifier = nn.Linear(self.config.hidden_size * 4 + additional_dims, num_labels)
         self.sub_selfatt_classifier = nn.Linear(self.config.hidden_size * 4, num_labels)
         self.ins_selfatt_classifier = nn.Linear(self.config.hidden_size * 4, num_labels)
 
         if self.train_instance_of:
             self.ins_classifier = nn.Linear(self.config.hidden_size * 4 + additional_dims, num_labels)
         
-        #self.learn_prototype = learn_prototype
-        #self.prototypes = nn.Parameter(torch.randn(num_labels, num_prototypes, self.prototype_size), requires_grad=learn_prototype)
-        #self.frozen_prototypes = self.prototypes.detach().clone()#
-        #self.count_prototype_samples = [0 for i in range(num_labels)]
         self.count = 0
 
         self.dense = nn.Linear(bert.config.hidden_size, bert.config.hidden_size)
@@ -72,22 +69,18 @@ class ProtSiam(nn.Module):
             self.concept_embeddings = nn.Embedding(num_concepts, self.prototype_size)
         
         if self.distance_metric:
-            self.isA_embedding = nn.Embedding(2, self.prototype_size)#, max_norm = 10, norm_type = 1)#Parameter(torch.randn(1, self.prototype_size), requires_grad=True)
+            self.isA_embedding = nn.Embedding(2, self.prototype_size)#, max_norm = 10, norm_type = 1)
             self.isA_embedding.weight.data.uniform_(-0.5, 0.5)
-            #pdb.set_trace()
-            #if self.train_instance_of:
-            #    self.isA_embedding[1] = nn.Embedding(1, self.prototype_size)#Parameter(torch.randn(1, self.prototype_size), requires_grad=True)
+            
 
 
     def forward(
         self,
         hypo_embeddings, hyper_embeddings, hypo=None, hyper=None, mode = 'subclass'
     ):  
-        # mode -> 'subclass' 单独train subclass; 
-        #         'subclass_instance', train subclass，且同时计算每个instance和对方concept的关系
-        #         'instance' 单独train instance
+        # mode in ['subclass', 'instance', 'subclass_selfatt', 'instance_selfatt']
+
         device = hypo_embeddings.device
-        #pdb.set_trace()
 
         hypo_embeddings_ = self.dropout(hypo_embeddings)
         hyper_embeddings_ = self.dropout(hyper_embeddings)
@@ -100,29 +93,24 @@ class ProtSiam(nn.Module):
         att = att.sum(dim = -1)
 
 
-        hypo_side_att = torch.softmax(att, dim = -1) # hypo对hyper的attention
-        hyper_side_att = torch.softmax(att, dim = 0) # hyper对hypo的attention
+        hypo_side_att = torch.softmax(att, dim = -1) # attention from hypo to hyper
+        hyper_side_att = torch.softmax(att, dim = 0) # attention from hyper to hypo
 
-        hyper_typicalness = hypo_side_att.sum(dim = 0)  # 对于一个hyper_ent，每个hypo_ent对它的注意力之和，作为这个hyper_ent的典型度
-        
-
+        # Ensemble Weights of hyper
+        hyper_typicalness = hypo_side_att.sum(dim = 0)  
         assert sum(hyper_typicalness) != 0
-
         hyper_typicalness = hyper_typicalness / sum(hyper_typicalness)
-        # 同理，对于一个hypo_ent，用每个hyper_ent的注意力之和，作为hypo_ent的典型度
-        # hypo_typicalness = hyper_side_att.sum(dim = -1) 
-        # 但我不想直接求和，我想用hyper_typicalness，即hyper实体的典型度来加权求和
-        # 这里可以多尝试一下 mark
-        # hypo_typicalness = (hyper_typicalness * hyper_side_att).sum(dim = -1)
+        
+        # Ensemble Weights of hypo
         hypo_typicalness = hyper_side_att.sum(dim = -1) 
         assert sum(hypo_typicalness) != 0
         hypo_typicalness = hypo_typicalness / sum(hypo_typicalness)
 
 
-        attended_hyper_prototypes = torch.matmul(hypo_side_att, hyper_embeddings_) # 每个hypo_ent里，hyper_con的prototype
+        attended_hyper_prototypes = torch.matmul(hypo_side_att, hyper_embeddings_) # Instance-view prototypes of hyper 
         hyper_prototype = (attended_hyper_prototypes * hypo_typicalness.unsqueeze(1)).sum(dim=0)
 
-        attended_hypo_prototypes = torch.matmul(hyper_side_att.transpose(0, 1), hypo_embeddings_) # 每个hyper_ent里，hypo_con的prototype
+        attended_hypo_prototypes = torch.matmul(hyper_side_att.transpose(0, 1), hypo_embeddings_) # Instance-view prototypes of hypo
         hypo_prototype = (attended_hypo_prototypes * hyper_typicalness.unsqueeze(1)).sum(dim=0)
 
         if mode in ['subclass_selfatt', 'instance_selfatt']:
@@ -149,7 +137,7 @@ class ProtSiam(nn.Module):
                 hyper_distance = hyper_distance.detach()
             hyper_radius = (hyper_distance * hyper_typicalness).sum()
 
-            feature_tensors += [ hyper_radius.unsqueeze(0), hypo_radius.unsqueeze(0)] # 之前的顺序是先hypo_radius.unsqueeze(0)..这个不会影响吧？
+            feature_tensors += [ hyper_radius.unsqueeze(0), hypo_radius.unsqueeze(0)] 
             geoinfo['hypo_radius'] = hypo_radius
             geoinfo['hyper_radius'] = hyper_radius
 
@@ -168,15 +156,11 @@ class ProtSiam(nn.Module):
             feature_tensors.append(euclidean_distance.unsqueeze(0))
             geoinfo['euclidean_distance'] = euclidean_distance
 
-        
-        
         self.count += 1
         
         if not self.distance_metric:
-            #pdb.set_trace()
             feature_tensors += [hyper_prototype, hypo_prototype, hyper_prototype - hypo_prototype, hyper_prototype * hypo_prototype]
             if mode == 'instance' and self.separate_classifier:
-                #sub_pred = self.ins_classifier(torch.cat(feature_tensors)).squeeze() #回来再改这个问题! 要将距离计算也加上
                 sub_pred = self.ins_classifier(torch.cat(feature_tensors)).squeeze()
                 res = {'sub_pred': sub_pred}
             else:
@@ -189,11 +173,10 @@ class ProtSiam(nn.Module):
                 rel_embedding = self.isA_embedding(torch.tensor(0).to(device))
             offset = (hypo_prototype + rel_embedding - hyper_prototype)
             
-            distance = torch.norm(offset, p=1, dim = -1) #offset.abs().sum() # L1距离
+            distance = torch.norm(offset, p=1, dim = -1) 
             res = {'distance': distance}
 
         torch.set_printoptions(precision=6)
-        #pdb.set_trace()
 
         return res
 
@@ -212,9 +195,8 @@ class ProtSiam(nn.Module):
             else:
                 rel_embedding = self.isA_embedding(torch.tensor(0).to(self.bert.device))
             offset = (hypo_prototype + rel_embedding - hyper_prototype)
-            #pdb.set_trace()
 
-            distance = torch.norm(offset, p=1, dim = -1) # offset.abs().sum()
+            distance = torch.norm(offset, p=1, dim = -1)
             res = {'distance': distance}
 
         return res
@@ -249,10 +231,9 @@ class ProtSiam(nn.Module):
         return pooled_output
 
     def frozen_bert_embed(self, insts_idxs):
-        #pdb.set_trace()
+
         insts_embeddings = self.instance_embeddings(insts_idxs)
         pooled_output = self.dense(insts_embeddings)
-        #pooled_output = self.activation(insts_embeddings)
         pooled_output = self.activation(pooled_output)
 
         return pooled_output
@@ -286,11 +267,10 @@ class ProtSiam(nn.Module):
         inputs = tokenizer(texts, max_length = max_length, truncation=True, return_tensors='pt', padding=True)
 
         for it, text in enumerate(texts):
-            #tokens = tokenizer.convert_ids_to_tokens(tokenizer(text, max_length = max_length, truncation=True)['input_ids'])
             tokens = tokenizer.convert_ids_to_tokens(inputs['input_ids'][it].tolist())
-            #pdb.set_trace()
-            num_tokens = tokens.index('[SEP]')+1#len(tokens)
-            num_predicts = int((num_tokens-2) * predict_ratio) # 去掉CLS和SEP
+  
+            num_tokens = tokens.index('[SEP]')+1
+            num_predicts = int((num_tokens-2) * predict_ratio) # except CLS and SEP
             predict_positions = sorted(random.sample(range(1, num_tokens-2), num_predicts))
             predict_positions_list.append(predict_positions)
 
@@ -298,8 +278,7 @@ class ProtSiam(nn.Module):
 
             
             predict_labels = tokenizer.convert_tokens_to_ids([tokens[p] for p in predict_positions])
-            if 0 in predict_labels:
-                pdb.set_trace()
+
             predict_labels_list.append(predict_labels)
 
 
@@ -315,7 +294,7 @@ class ProtSiam(nn.Module):
                 tokens[random_position] = random_word
 
             inputs['input_ids'][it] = torch.tensor(tokenizer.convert_tokens_to_ids(tokens))
-        #pdb.set_trace()
+
         inputs.to(device)
 
         outputs = self.bert(**inputs)
@@ -334,7 +313,7 @@ class ProtSiam(nn.Module):
             total_num_predicts += num_predicts
 
             loss_fct = CrossEntropyLoss()
-            #pdb.set_trace()
+   
             masked_lm_loss = loss_fct(predict_position_scores, torch.tensor(predict_labels).to(device))
             all_mlm_loss += masked_lm_loss * num_predicts
             
@@ -364,9 +343,7 @@ class ProtVanilla(nn.Module):
         self.dense = nn.Linear(bert.config.hidden_size, bert.config.hidden_size)
         self.activation = nn.Tanh()
 
-        #pdb.set_trace()
         self.sub_classifier = nn.Linear(self.config.hidden_size * 4, num_labels)
-        
 
         self.prototype_size = self.hidden_dim
 
@@ -381,7 +358,7 @@ class ProtVanilla(nn.Module):
             self.ins_classifier = nn.Linear(self.config.hidden_size * 4, num_labels)
 
         if self.distance_metric:
-            self.isA_embedding = nn.Embedding(2, self.prototype_size)#Parameter(torch.randn(1, self.prototype_size), requires_grad=True)
+            self.isA_embedding = nn.Embedding(2, self.prototype_size)
             self.isA_embedding.weight.data.uniform_(-0.5, 0.5)
 
 
@@ -399,7 +376,7 @@ class ProtVanilla(nn.Module):
 
 
         if mode in ['subclass_selfatt', 'instance_selfatt']:
-            res = {'prototype': hyper_prototype } #(hyper_prototype + hypo_prototype) /2}
+            res = {'prototype': hyper_prototype } 
             return res
         
         if not self.distance_metric:
@@ -416,7 +393,7 @@ class ProtVanilla(nn.Module):
             else:
                 rel_embedding = self.isA_embedding(torch.tensor(0).to(device))
             offset = (hypo_prototype + rel_embedding - hyper_prototype)
-            distance = torch.norm(offset, p=1, dim=1)#offset.abs().sum() # L1距离
+            distance = torch.norm(offset, p=1, dim=1)
             res = {'distance': distance}
 
         return res
@@ -436,7 +413,7 @@ class ProtVanilla(nn.Module):
                 rel_embedding = self.isA_embedding(torch.tensor(0).to(self.bert.device))
             offset = (hypo_prototype + rel_embedding - hyper_prototype)
 
-            distance = torch.norm(offset, p=1, dim = -1) # offset.abs().sum()
+            distance = torch.norm(offset, p=1, dim = -1) 
             res = {'distance': distance}
 
         return res
@@ -472,10 +449,9 @@ class ProtVanilla(nn.Module):
         return pooled_output
 
     def frozen_bert_embed(self, insts_idxs):
-        #pdb.set_trace()
+
         insts_embeddings = self.instance_embeddings(insts_idxs)
         pooled_output = self.dense(insts_embeddings)
-        #pooled_output = self.activation(insts_embeddings)
         pooled_output = self.activation(pooled_output)
 
         return pooled_output
@@ -507,11 +483,10 @@ class ProtVanilla(nn.Module):
         inputs = tokenizer(texts, max_length = max_length, truncation=True, return_tensors='pt', padding=True)
 
         for it, text in enumerate(texts):
-            #tokens = tokenizer.convert_ids_to_tokens(tokenizer(text, max_length = max_length, truncation=True)['input_ids'])
             tokens = tokenizer.convert_ids_to_tokens(inputs['input_ids'][it].tolist())
-            #pdb.set_trace()
-            num_tokens = tokens.index('[SEP]')+1#len(tokens)
-            num_predicts = int((num_tokens-2) * predict_ratio) # 去掉CLS和SEP
+
+            num_tokens = tokens.index('[SEP]')+1
+            num_predicts = int((num_tokens-2) * predict_ratio) # except CLS and SEP
             predict_positions = sorted(random.sample(range(1, num_tokens-2), num_predicts))
             predict_positions_list.append(predict_positions)
 
@@ -519,8 +494,7 @@ class ProtVanilla(nn.Module):
 
             
             predict_labels = tokenizer.convert_tokens_to_ids([tokens[p] for p in predict_positions])
-            if 0 in predict_labels:
-                pdb.set_trace()
+  
             predict_labels_list.append(predict_labels)
 
 
@@ -536,7 +510,7 @@ class ProtVanilla(nn.Module):
                 tokens[random_position] = random_word
 
             inputs['input_ids'][it] = torch.tensor(tokenizer.convert_tokens_to_ids(tokens))
-        #pdb.set_trace()
+
         inputs.to(device)
 
         outputs = self.bert(**inputs)
@@ -565,25 +539,6 @@ class ProtVanilla(nn.Module):
         
         if total_num_predicts != 0:
             all_mlm_loss /= total_num_predicts
-        else:
-            pdb.set_trace()
             
         return all_mlm_loss
-
-def subclass_loss(geoinfo, label):
-    euclidean_distance, hypo_radius, hyper_radius = geoinfo['euclidean_distance'], geoinfo['hypo_radius'], geoinfo['hyper_radius']
-    if label == 0:
-        loss = max((hyper_radius - hypo_radius).abs() - euclidean_distance, torch.tensor(0).float().to(hypo_radius.device))
-        # 如果相容，那么 (hyper_radius - hypo_radius).abs() - euclidean_distance > 0
-        # 那么 不相容，要求 (hyper_radius - hypo_radius).abs() - euclidean_distance < 0，越小越好
-        # 如果loss很大，说明euclidean_distance很小，不好！
-    elif label == 1:
-        # hypo 属于 hyper，希望hypo被hyper包含，
-        # 即，希望 euclidean_distance + hypo_radius < hyper_radius，且hypo_radius < hyper_radius
-        # 这已经蕴含了 hypo_radius < hyper_radius
-        loss = max(euclidean_distance + hypo_radius - hyper_radius, torch.tensor(0).float().to(hypo_radius.device))
-    else:
-        loss = max(euclidean_distance + hyper_radius - hypo_radius, torch.tensor(0).float().to(hypo_radius.device))
-    
-    return loss
 

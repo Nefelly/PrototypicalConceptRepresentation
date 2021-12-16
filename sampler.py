@@ -7,7 +7,7 @@ import math
 import time
 import os
 import pickle
-#from sklearn.metrics import roc_auc_score, precision_recall_curve, auc 
+from sklearn.metrics import roc_auc_score, precision_recall_curve, auc 
 
 
 class Sampler:
@@ -47,26 +47,6 @@ class Sampler:
 			num2 = min(len(ents2), ent_per_con)
 			num1 = min(len(ents1), 2*ent_per_con - num2)
 
-		#print('Num {} {} , {} {}'.format(len(ents1), num1, len(ents2), num2))
-		#pdb.set_trace()
 		ents1 = random.sample(ents1, num1)
 		ents2 = random.sample(ents2, num2)
 		return ents1, ents2
-
-	def sample_alone(self, con):
-		# 为一个概念，sample两组实体A，B，判断B下的每一个实体是否属于A
-		ent_per_con = 3
-		concept_entity_info = self.concept_entity_info
-		instance_info = self.instance_info
-
-		ents = [ instance_info[ins] for ins in concept_entity_info[con] ]
-
-		if len(ents) <= ent_per_con:
-			return None, None
-
-		num1 = ent_per_con
-		num2 = min(len(ents) - ent_per_con, ent_per_con)
-
-		ents = random.sample(ents, num1+num2)
-		#pdb.set_trace()
-		return ents[:num1], ents[num1:]

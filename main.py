@@ -71,9 +71,9 @@ if __name__ == '__main__':
 		identifier = 'cn'
 	elif arg.language == 'en':
 		#with open('/home/nefeli/data/v2_en/{0}_en_dataset.pkl'.format(arg.data), 'rb') as fil:
-		data_path = '/home/nefeli/data/v2_en/{0}_en_dataset.pkl'.format(arg.data)
+		#data_path = '/home/nefeli/data/v2_en/{0}_en_dataset.pkl'.format(arg.data)
 		
-		#data_path = '/mnt/data/nefeli/data/v2_en/{0}_en_dataset.pkl'.format(arg.data)
+		data_path = '/mnt/data/nefeli/data/v2_en/{0}_en_dataset.pkl'.format(arg.data)
 		#data_path = '/mnt/data/nefeli/data/v2_en/{0}_en_dataset_138.pkl'.format(arg.data)
 		#'/home/nefeli/data/v2_en/{0}_en_dataset.pkl'.format(arg.data) #'/home/kw/nf/data/v2_en/{0}_en_dataset.pkl'.format(arg.data)
 

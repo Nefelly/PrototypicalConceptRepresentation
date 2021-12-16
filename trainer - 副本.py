@@ -7,14 +7,15 @@ import time
 import math
 import os
 import pickle
-from sklearn.metrics import roc_auc_score, precision_recall_curve, auc 
+#from sklearn.metrics import roc_auc_score, precision_recall_curve, auc 
 from sampler import Sampler
+from models import subclass_loss
 from utils import clip_grad_norm_,  detect_nan_params
 import numpy as np
 
 save_folder = './params/'
 
-add_concept_hint = True#False
+add_concept_hint = True#False#True# True#False#
 trainable_models = ['psn', 'prot_vanilla']
 
 gradual_epochs = 0.001
@@ -26,7 +27,7 @@ else:
 	max_length = 400
 	sample_limit = 1000000000
 
-distance_margin = 9 #Following KEPLER
+distance_margin = 9 # Following KEPLER‘’
 distance_eps = 1e-10
 
 class Trainer:
@@ -57,7 +58,7 @@ class Trainer:
 
 		self.instance_info = data_bundle['instance_info']
 		self.concept_info = data_bundle.get('concept_info', None)
-		self.instances = instances = self.instance_info.keys()
+		self.instances = instances = self.instance_info.keys()#data_bundle['instances']
 		self.ins2id = { ins: ic for ic, ins in enumerate(sorted(instances))}
 		self.id2ins = { ic: ins for ic, ins in enumerate(sorted(instances))}
 
@@ -80,6 +81,7 @@ class Trainer:
 		self.param_path_template = self.save_folder + additional_info + self.model_name + '_' + self.identifier + '_' + self.hyperparams['plm'] +'_'+self.hyperparams['variant']+  '_epc_{0}_metric_{1}'  + '.pt'
 		self.history_path = self.save_folder + additional_info + self.model_name + '_' + self.identifier + '_' + self.hyperparams['plm'] +'_'+self.hyperparams['variant']+  '_history_{0}'  + '.pkl'
 		
+		#pdb.set_trace()
 		if hyperparams['freeze_plm']:
 			self.initialize_embeddings()
 
@@ -93,6 +95,7 @@ class Trainer:
 					self.history_value = pickle.load(fil)
 
 
+		#pdb.set_trace()
 		if ((load_path != None) and (not load_path.startswith(save_folder))):
 			load_path = save_folder + load_path
 		
@@ -135,6 +138,10 @@ class Trainer:
 		model = self.model
 
 		instance_embeddings = self.get_initial_embeddings()
+		#with open('save_embeddings.pkl', 'rb') as fil:
+		#    save_embeddings = pickle.load(fil)
+		#    instance_embeddings = save_embeddings['instance_embeddings']
+
 		model.instance_embeddings.weight = torch.nn.Parameter(instance_embeddings.clone().detach()).to(device)
 
 	def get_initial_embeddings(self):
@@ -165,6 +172,7 @@ class Trainer:
 
 		model.eval()
 		with torch.no_grad():
+			# instance embeddings
 			num_instances = len(instances)
 			random_map = [i for i in range(num_instances)]
 			batch_list = [ random_map[i:i+batch_size] for i in range(0, num_instances ,batch_size)] 
@@ -176,6 +184,8 @@ class Trainer:
 				inputs.to(device)
 				embeddings = model.bert_embed(**inputs)
 				instance_embeddings[batch] = embeddings
+
+			
 
 		save_embeddings = {
 			'instance_embeddings': instance_embeddings
@@ -189,13 +199,16 @@ class Trainer:
 
 
 	def run(self):
-		#self.train()
-		try:
+		if self.model_name in trainable_models:
 			self.train()
-		except:
-			print('Best Epoch {0} micro_f1 {1}'.format(self.best_epoch, self.best_metric))
-
-
+			try:
+				self.train()
+			except:
+				print('Best Epoch {0} micro_f1 {1}'.format(self.best_epoch, self.best_metric))
+				pdb.set_trace()
+		else:
+			pass
+			#self.use_statistic()
 
 	def train(self):
    
@@ -218,13 +231,26 @@ class Trainer:
 		model_name = hyperparams['model_name']
 		ent_per_con = hyperparams['ent_per_con']
 		
+		if hyperparams['language'] == 'cn':
+			fixed_num_insts = True
+			if hyperparams['use_probase_text']:
+				text_key = 'text_from_dbpedia_probase'
+			else:
+				text_key = 'text_from_dbpedia'
+			hypo_hint_template = '该物属于概念"{0}"，判断"{1}"是否被"{2}"包含。'
+			hyper_hint_template = '该物属于概念"{0}"，判断"{1}"是否包含"{2}"。'
+			single_hint_template = '该物属于概念"{0}"。'
 
-		fixed_num_insts = False 
-		text_key = 'text_from_wikipedia'
-
-		single_hint_template = 'This item belongs to concept "{0}". '
+		else:
+			fixed_num_insts = False 
+			text_key = 'text_from_wikipedia'
+			hypo_hint_template = 'This item belongs to concept "{0}". Please judge whether concept "{1}" is contained by concept "{2}". '
+			hyper_hint_template = 'This item belongs to concept "{0}". Please judge whether concept "{1}" contain concept "{2}". '
+			single_hint_template = 'This item belongs to concept "{0}". '
 
 		concepts = self.data_bundle['concept_instance_info'].keys()
+
+		evaluate_threshold = hyperparams['evaluate_threshold']
 
 		criterion = torch.nn.CrossEntropyLoss()
 
@@ -244,7 +270,6 @@ class Trainer:
 				self.test_subclass(epc, valid = True)
 				if hyperparams['train_instance_of']:
 					self.test_instance(epc, valid = True)
-				self.link_prediction(epc)
 			if hyperparams['variant'] in ['selfatt', 'hybrid']:
 				self.test_subclass(epc, selfatt = True, valid = True)
 				if hyperparams['train_instance_of']:
@@ -292,7 +317,7 @@ class Trainer:
 			count_instance = 0
 			count_instance_selfatt = 0
 
-			for bt, batch in tqdm(enumerate(batch_list)):
+			for bt, batch in enumerate(batch_list):
 				triple = dataset[batch[0]]
 				hypo, hyper, label = triple
 
@@ -330,11 +355,14 @@ class Trainer:
 				
 				if self.model_name in trainable_models:
 					# train subclass of
-					if not hyperparams['con_desc']: # use description of concept instead of the concept's instances' descriptions
+					if not hyperparams['con_desc']: # 不使用概念本身的描述，即使用实例的描述
 						if not hyperparams['freeze_plm']:
-
-							hypo_hint = single_hint_template.format(hypo) if add_concept_hint else ''
-							hyper_hint = single_hint_template.format(hyper) if add_concept_hint else ''
+							if rel_type not in  ['subclass_selfatt', 'instance_selfatt']:
+								hypo_hint = hypo_hint_template.format(hypo, hypo, hyper) if add_concept_hint else ''
+								hyper_hint = hyper_hint_template.format(hyper, hyper, hypo) if add_concept_hint else ''
+							else:
+								hypo_hint = single_hint_template.format(hypo) if add_concept_hint else ''
+								hyper_hint = single_hint_template.format(hyper) if add_concept_hint else ''
 
 							if rel_type in ['subclass', 'subclass_selfatt']:
 								hypo_texts = [  hypo_hint + e[text_key] for e in hypo_ents]
@@ -412,12 +440,14 @@ class Trainer:
 						res = model(hypo_embeddings, hyper_embeddings, hypo, hyper, mode = rel_type)
 						
 					else:
-						hypo_res = model(hypo_embeddings, hypo_embeddings, hypo, hypo, mode = rel_type)
-						hypo_prototype = hypo_res['prototype']
+						try:
+							hypo_res = model(hypo_embeddings, hypo_embeddings, hypo, hypo, mode = rel_type)
+							hypo_prototype = hypo_res['prototype']
 
-						hyper_res = model(hyper_embeddings, hyper_embeddings, hyper, hyper, mode = rel_type)
-						hyper_prototype = hyper_res['prototype']
-
+							hyper_res = model(hyper_embeddings, hyper_embeddings, hyper, hyper, mode = rel_type)
+							hyper_prototype = hyper_res['prototype']
+						except:
+							pdb.set_trace()
 
 						res = model.judge(hypo_prototype, hyper_prototype, mode = rel_type)
 					
@@ -464,7 +494,10 @@ class Trainer:
 
 					optimizer.zero_grad()
 					loss.backward()
-
+					#grads = [ p.grad.norm() for p in model.parameters() if p.grad != None]
+					#clip_grad_norm_(model.parameters(), max_norm=2, norm_type=2)
+					#pdb.set_trace()
+					#print([p.grad for n, p in model.named_parameters()][1].sum())
 					optimizer.step()
 				 
 				count_step += 1
@@ -498,7 +531,7 @@ class Trainer:
 				if hyperparams['train_instance_of']:
 					rel_types.append('instance_selfatt')
 
-			'''  output training information
+			'''
 			for rel_type in rel_types:
 				print("{0} Avg Loss:{1:.5f} Accuracy: {2:.5f}".format(rel_type, avg_loss[rel_type], avg_accuracy[rel_type]))
 				for label in range(hyperparams['num_labels']):
@@ -524,8 +557,6 @@ class Trainer:
 					self.test_subclass(epc, valid = True)
 					if hyperparams['train_instance_of']:
 						self.test_instance(epc, valid = True)
-					self.link_prediction(epc)
-					
 				if hyperparams['variant'] in ['selfatt', 'hybrid']:
 					self.test_subclass(epc, selfatt = True, valid = True)
 					if hyperparams['train_instance_of']:
@@ -540,6 +571,9 @@ class Trainer:
 				if os.path.exists(last_history_path):
 					os.remove(last_history_path)
 				
+
+
+
 
 	def test_subclass(self, epc, selfatt = False, valid=True):
 		concept_instance_info = self.data_bundle['concept_instance_info']
@@ -556,13 +590,25 @@ class Trainer:
 		model_name = hyperparams['model_name']
 		ent_per_con = hyperparams['ent_per_con']
 
+		if hyperparams['language'] == 'cn':
+			fixed_num_insts = True
+			if hyperparams['use_probase_text']:
+				text_key = 'text_from_dbpedia_probase'
+			else:
+				text_key = 'text_from_dbpedia'
+			hypo_hint_template = '该物属于概念"{0}"，判断"{1}"是否被"{2}"包含。'
+			hyper_hint_template = '该物属于概念"{0}"，判断"{1}"是否包含"{2}"。'
+			single_hint_template = '该物属于概念"{0}"。'
 
-		fixed_num_insts = False 
-		text_key = 'text_from_wikipedia'
-
-		single_hint_template = 'This item belongs to concept "{0}". '
+		else:
+			fixed_num_insts = False 
+			text_key = 'text_from_wikipedia'
+			hypo_hint_template = 'This item belongs to concept "{0}". Please judge whether concept "{1}" is contained by concept "{2}". '
+			hyper_hint_template = 'This item belongs to concept "{0}". Please judge whether concept "{1}" contain concept "{2}". '
+			single_hint_template = 'This item belongs to concept "{0}". '
 
 		concepts = self.data_bundle['concept_instance_info'].keys()
+		evaluate_threshold = hyperparams['evaluate_threshold']
 
 		criterion = torch.nn.CrossEntropyLoss()
 
@@ -611,6 +657,8 @@ class Trainer:
 			recall = {0: 0, 1: 0, 2: 0}
 			micro_f1 = {0: 0, 1: 0, 2: 0}
 
+			#pair_accuracy = {}
+			#pair_cnt = {}
 
 			time_1 = time.time()
 
@@ -624,7 +672,7 @@ class Trainer:
 				hypo_ents, hyper_ents = sampler.sample(hypo, hyper)
 
 				
-				''' for case study
+				'''
 				hypo, hyper = 'sport', 'game'
 				hypo_ent_names = ['tennis', 'angling', 'basketball', 'yoga']
 				hyper_ent_names = ['football', 'angry birds', 'boxing', 'mahjong']
@@ -636,9 +684,12 @@ class Trainer:
 
 					if not hyperparams['con_desc']:
 						if not hyperparams['freeze_plm']:
- 
-							hypo_hint = single_hint_template.format(hypo) if add_concept_hint else ''
-							hyper_hint = single_hint_template.format(hyper) if add_concept_hint else ''
+							if selfatt == False:
+								hypo_hint = hypo_hint_template.format(hypo, hypo, hyper) if add_concept_hint else ''
+								hyper_hint = hyper_hint_template.format(hyper, hyper, hypo) if add_concept_hint else ''
+							else:
+								hypo_hint = single_hint_template.format(hypo) if add_concept_hint else ''
+								hyper_hint = single_hint_template.format(hyper) if add_concept_hint else ''
 	
 							hypo_texts = [  hypo_hint + e[text_key] for e in hypo_ents]
 							hyper_texts = [  hyper_hint + e[text_key] for e in hyper_ents]
@@ -693,10 +744,11 @@ class Trainer:
 						subpred = res['sub_pred']
 						subpred_label = subpred.argmax().item()
 
-						total_accuracy += int(subpred_label == label)
-
+						total_accuracy += int(subpred_label == label)#(pred_label == label).float().mean().item()
 						
-						loss = criterion(subpred.unsqueeze(0), torch.tensor([label]).to(device)) 
+						#pdb.set_trace()
+						
+						loss = criterion(subpred.unsqueeze(0), torch.tensor([label]).to(device)) #+ subclass_loss(geoinfo, label)
 						total_loss += loss.item()
 
 						if subpred_label == label:
@@ -705,6 +757,7 @@ class Trainer:
 								if i != label:
 									TN[i] += 1
 						else:
+							#pdb.set_trace()
 							FP[subpred_label] += 1
 							FN[label] += 1
 							TN[3-label-subpred_label] += 1
@@ -717,7 +770,10 @@ class Trainer:
 						labels.append(label)
 						scores.append(distance.item())
 
+						if (len(labels) != len(scores)):
+							pdb.set_trace()
 
+					
 
 					time_2 = time.time()
 			
@@ -732,7 +788,7 @@ class Trainer:
 					to_get_metric_labels = [ v for i, v in enumerate(labels) if i % 2 == 1 ]
 
 				else:
-					# At test mode, use data in valid set to get threshold
+					# At test mode, use datum in valid set to get threshold
 					split_idx = num_valid
 
 					to_get_thereshold_scores = scores[:split_idx]
@@ -741,6 +797,7 @@ class Trainer:
 					to_get_metric_scores = scores[split_idx:]
 					to_get_metric_labels = labels[split_idx:]
 
+				#pdb.set_trace()
 				threshold, res_max = self.get_best_threshold(to_get_thereshold_scores, to_get_thereshold_labels)
 				avg_accuracy, TP[1], FP[1], TN[1], FN[1] = self.get_metrics(threshold, to_get_metric_scores, to_get_metric_labels)
 				
@@ -753,8 +810,15 @@ class Trainer:
 				avg_accuracy = total_accuracy / dataset_size
 				print("Test Epoch (Subclass) :{0} Avg Loss:{1:.5f} Accuracy: {2:.5f} Time: {3:.5f} SelfAtt: {4}".format(epc, avg_loss, avg_accuracy, time_2 - time_1, selfatt))
 
+				#for pr in pair_accuracy.keys():
+				#    pair_accuracy[pr] /= pair_cnt[pr]
+
+				#pdb.set_trace()
+
+
 			
 			for label in [1]: #range(hyperparams['num_labels']):
+				#pdb.set_trace()
 				if TP[label] + FP[label] > 0:
 					precision[label] = TP[label] / ( TP[label] + FP[label])
 				else:
@@ -792,13 +856,25 @@ class Trainer:
 		model_name = hyperparams['model_name']
 		ent_per_con = hyperparams['ent_per_con']
 
+		if hyperparams['language'] == 'cn':
+			fixed_num_insts = True
+			if hyperparams['use_probase_text']:
+				text_key = 'text_from_dbpedia_probase'
+			else:
+				text_key = 'text_from_dbpedia'
+			hypo_hint_template = '该物属于概念"{0}"，判断"{1}"是否被"{2}"包含。'
+			hyper_hint_template = '该物属于概念"{0}"，判断"{1}"是否包含"{2}"。'
+			single_hint_template = '该物属于概念"{0}"。'
 
-		fixed_num_insts = False 
-		text_key = 'text_from_wikipedia'
-
-		single_hint_template = 'This item belongs to concept "{0}". '
+		else:
+			fixed_num_insts = False 
+			text_key = 'text_from_wikipedia'
+			hypo_hint_template = 'This item belongs to concept"{0}". Please judge whether concept "{1}" is contained by concept "{2}".'
+			hyper_hint_template = 'This item belongs to concept"{0}". Please judge whether concept "{1}" contain concept "{2}".'
+			single_hint_template = 'This item belongs to concept "{0}". '
 
 		concepts = self.data_bundle['concept_instance_info'].keys()
+		evaluate_threshold = hyperparams['evaluate_threshold']
 
 		criterion = torch.nn.CrossEntropyLoss()
 
@@ -862,15 +938,19 @@ class Trainer:
 					hyper_ents = sampler.sample_single(hyper, exclude_ins = hypo)
 				elif hyper in instances:
 					hypo_ents = sampler.sample_single(hypo, exclude_ins = hyper)
-
+				else:
+					pdb.set_trace()
 
 				if self.model_name in trainable_models:
 
 					if not hyperparams['con_desc']:
 						if not hyperparams['freeze_plm']:
-
-							hypo_hint = single_hint_template.format(hypo) if add_concept_hint else ''
-							hyper_hint = single_hint_template.format(hyper) if add_concept_hint else ''
+							if selfatt == False:
+								hypo_hint = hypo_hint_template.format(hypo, hypo, hyper) if add_concept_hint else ''
+								hyper_hint = hyper_hint_template.format(hyper, hyper, hypo) if add_concept_hint else ''
+							else:
+								hypo_hint = single_hint_template.format(hypo) if add_concept_hint else ''
+								hyper_hint = single_hint_template.format(hyper) if add_concept_hint else ''
 
 
 							if hypo in instances:
@@ -1044,25 +1124,23 @@ class Trainer:
 		hyperparams = self.hyperparams
 		
 		
-		concepts = self.concepts 
+		concepts = self.concepts #data_bundle['concept_instance_info'].keys()
 		instances = self.instances
 		prototype_size = model.prototype_size
 
 		type_constrain = self.hyperparams['type_constrain']
 		
-		embeddings = self.generate_concept_prototype()
-		# for quick use of already generated representations
-		with open('embeddings_lp.pkl', 'rb') as fil:
+		#pdb.set_trace()
+
+		#embeddings = self.generate_concept_prototype()
+
+		with open('embeddings.pkl', 'rb') as fil:
 			embeddings = pickle.load(fil)
-		
 
 		instance_embeddings = embeddings['instance_embeddings'].to(device)
-		concept_prototypes = embeddings['concept_prototypes']
-		if not hyperparams['variant'] == 'default':
-			concept_prototypes = concept_prototypes.to(device)
+		concept_prototypes = embeddings['concept_prototypes'].to(device)
 
-		ins_of_con_embeddings = embeddings['ins_of_con_embeddings']
-
+		#batch_size = 16
 		id2con = self.id2con
 		con2id = self.con2id
 
@@ -1071,10 +1149,11 @@ class Trainer:
 
 		if not type_constrain:
 			num_concepts = len(concepts)
-	
+			#pdb.set_trace()
 			id2ins = { (k+num_concepts): v for k, v in id2ins.items()}
 			ins2id = { k: (v+num_concepts) for k, v in ins2id.items()}
 
+		sampler = Sampler(concept_instance_info, self.instance_info, hyperparams['typicalness'], hyperparams['ent_per_con'], 'train', False)
 
 		Candidates = { 'subclass': { 'head': set(), 'tail': set()},
 					   'instance': { 'head': set(), 'tail': set()}
@@ -1086,12 +1165,14 @@ class Trainer:
 		}
 
 		if valid:
-			isSubclassOf_triples = { 'all': self.data_bundle['isSubclassOf_triples'], 'test': self.data_bundle['subclass_test'] }
-			isInstanceOf_triples = { 'all': self.data_bundle['isInstanceOf_triples'], 'test': self.data_bundle['instance_test'] }
-		else:
 			isSubclassOf_triples = { 'all': self.data_bundle['isSubclassOf_triples'], 'test': self.data_bundle['subclass_valid'] }
 			isInstanceOf_triples = { 'all': self.data_bundle['isInstanceOf_triples'], 'test': self.data_bundle['instance_valid'] }
-			
+		else:
+			isSubclassOf_triples = { 'all': self.data_bundle['isSubclassOf_triples'], 'test': self.data_bundle['subclass_test'] }
+			isInstanceOf_triples = { 'all': self.data_bundle['isInstanceOf_triples'], 'test': self.data_bundle['instance_test'] }
+			# 忘了把valid时link prediction的设为valid集合了，那只能在test时用valid集合了
+
+
 		print('Valid = ', valid, ' Num Test: sub {0} ins {1}'.format(len(isSubclassOf_triples['test']), len(isInstanceOf_triples['test'])))
 		
 		for split in ['all']:
@@ -1111,6 +1192,7 @@ class Trainer:
 		Candidates['instance']['tail'] = sorted(list(Candidates['instance']['tail']))
 
 
+		#pdb.set_trace()
 		for split in ['all', 'test']:
 			for triple in isSubclassOf_triples[split]:
 				hypo, hyper, label = triple 
@@ -1122,7 +1204,12 @@ class Trainer:
 				Groundtruth['instance']['tail'][split][hypo].add(hyper)
 				Groundtruth['instance']['head'][split][hyper].add(hypo)
 
+		#for rel in ['subclass', 'instance']:
+		#    for target in ['tail', 'head']:
+		#        for k in Groundtruth[rel][target]['all'].keys():
+		#            assert len(Groundtruth[rel][target]['test'][k].difference(Groundtruth[rel][target]['all'][k])) == 0
 
+		
 		model.eval()
 
 		ks = [1, 3, 10]
@@ -1150,134 +1237,143 @@ class Trainer:
 				for setting in ['raw', 'filter']
 			}
 
+		#pair_mrr = {}
+		#pair_cnt = {}
 
+		#pdb.set_trace()
 		with torch.no_grad():
-			for rel in ['subclass', 'instance']:
-				for target in ['head', 'tail']:
-					#for setting in ['raw', 'filter']:
-
-					if rel == 'subclass':
-						givens = concepts 
-						targets = concepts 
-						given_type = target_type = 'concept'
-					else:
-						if target == 'head':
-							givens = concepts
-							#targets = instances 
-							given_type = 'concept'
-							target_type ='instance'
+			# link prediction for subclass
+			for setting in ['raw', 'filter']:
+				for rel in ['subclass', 'instance']:
+					for target in ['head', 'tail']:
+						if rel == 'subclass':
+							givens = concepts 
+							targets = concepts 
+							given_type = target_type = 'concept'
 						else:
-							givens = instances 
-							#targets = concepts
-							given_type = 'instance'
-							target_type = 'concept'
+							if target == 'head':
+								givens = concepts
+								#targets = instances 
+								given_type = 'concept'
+								target_type ='instance'
+							else:
+								givens = instances 
+								#targets = concepts
+								given_type = 'instance'
+								target_type = 'concept'
 
 
-					count_triples = 0
-					for giv in tqdm(givens):        
-						testees = Groundtruth[rel][target]['test'][giv]
-						groundtruth = Groundtruth[rel][target]['all'][giv]
-	  
-						if not type_constrain:
-							groundtruth = Groundtruth['subclass'][target]['all'].get(giv,set()).union(Groundtruth['instance'][target]['all'].get(giv, set()))
+						count_triples = 0
+						for giv in tqdm(givens):        
+							testees = Groundtruth[rel][target]['test'][giv]
+							groundtruth = Groundtruth[rel][target]['all'][giv]#.union(Groundtruth[rel][target]['test'][giv])
+							#assert(groundtruth == Groundtruth[rel][target]['all'][giv])
+							if not type_constrain:
+								groundtruth = Groundtruth['subclass'][target]['all'].get(giv,set()).union(Groundtruth['instance'][target]['all'].get(giv, set()))
 							
 
-						if len(testees) > 0:
-							count_triples += len(testees)
-
-							if given_type == 'concept':
-								igiv = con2id[giv]
-								prototype = concept_prototypes[igiv]
-							else:
-								igiv = ins2id[giv]
-								if type_constrain:
-									prototype = instance_embeddings[igiv]
+							if len(testees) > 0:
+								count_triples += len(testees)
+								if given_type == 'concept':
+									igiv = con2id[giv]
+									prototype = concept_prototypes[igiv]
 								else:
-									prototype = instance_embeddings[igiv-num_concepts]
-
-							if type_constrain:
-									
-								if target_type == 'concept':
-									candidate_idxs = Candidates[rel][target]
-									if not hyperparams['variant'] == 'default': 
-										all_candidates = concept_prototypes[candidate_idxs]
-									target_size = len(candidate_idxs)
-								elif target_type == 'instance':
-									candidate_idxs = Candidates[rel][target]
-									if not hyperparams['variant'] == 'default': 
-										all_candidates = instance_embeddings[candidate_idxs]
-									target_size = len(candidate_idxs)
-									
-								candidate_maps = {c:i for i, c in enumerate(candidate_idxs)}
-								candidate_maps_reverse = { i:c for i, c in enumerate(candidate_idxs)}
-
-							else:
-								if not hyperparams['variant'] == 'default':
-									all_candidates = torch.cat([concept_prototypes, instance_embeddings], dim=0)
-								target_size = len(concepts) + len(instances)
-
-								
-							if not hyperparams['distance_metric']:
-								if hyperparams['variant'] == 'default':
-									assert (type_constrain) 
-
-									score = []
-
-									if giv in concepts:
-										ins_of_con_embeddings_giv = ins_of_con_embeddings[giv]
-										num_insts_giv = ins_of_con_embeddings_giv.shape[0]
-										chosen_insts = random.sample(range(num_insts_giv), min(hyperparams['ent_per_con'], num_insts_giv) )
-										
-										giv_embeddings = ins_of_con_embeddings_giv[chosen_insts].to(device)
+									igiv = ins2id[giv]
+									if type_constrain:
+										prototype = instance_embeddings[igiv]
 									else:
-										giv_embeddings = instance_embeddings[ins2id[giv]].unsqueeze(0)
+										prototype = instance_embeddings[igiv-num_concepts]
 
+								if type_constrain:
+									if target_type == 'concept':
+										candidate_idxs = Candidates[rel][target]#[ con2id[c] for c in Candidates[rel][target]]
+										all_candidates = concept_prototypes[candidate_idxs]
+										target_size = len(candidate_idxs)
+									elif target_type == 'instance':
+										candidate_idxs = Candidates[rel][target]#[ ins2id[c] for c in Candidates[rel][target]]
+										all_candidates = instance_embeddings[candidate_idxs]
+										target_size = len(candidate_idxs)
+									
+									candidate_maps = {c:i for i, c in enumerate(candidate_idxs)}
+									candidate_maps_reverse = { i:c for i, c in enumerate(candidate_idxs)}
+									'''
+									if target_type == 'concept':
+										all_candidates = concept_prototypes
+										target_size = len(concepts)
+									elif target_type == 'instance':
+										all_candidates = instance_embeddings
+										target_size = len(instances)
+									'''
+									
+								else:
+									#pdb.set_trace()
+									all_candidates = torch.cat([concept_prototypes, instance_embeddings], dim=0)
+									target_size = len(concepts) + len(instances)
+
+								#if target == 'head':
+								#    feature_tensors = [prototype.expand(len(concepts), prototype_size), concept_prototypes, prototype - concept_prototypes, prototype * concept_prototypes]
+								#else:
+								#    feature_tensors = [concept_prototypes, prototype.expand(len(concepts), prototype_size), concept_prototypes - prototype, concept_prototypes * prototype]
+								
+								if not hyperparams['distance_metric']:
 									for candidate_idx in candidate_idxs:
 										if target_type == 'concept':
 											cand = id2con[candidate_idx]
 										else:
 											cand = id2ins[candidate_idx]
-
+										
 										if target == 'head':
-												
-											hypo = cand
-											if target_type == 'concept': # hypo is concept
-												ins_of_con_embeddings_cand = ins_of_con_embeddings[cand]
-												num_insts_cand = ins_of_con_embeddings_cand.shape[0]
-												chosen_insts = random.sample(range(num_insts_cand), min(hyperparams['ent_per_con'], num_insts_cand) )
-												cand_embeddings = ins_of_con_embeddings_cand[chosen_insts].to(device)
-												hypo_embeddings = cand_embeddings
-											else: # hypo is instance
-												hypo_embeddings = instance_embeddings[ins2id[hypo]].unsqueeze(0)
-											hyper = giv
-											hyper_embeddings = giv_embeddings 
+											hypo = cand 
+											hyper = giv 
 										else:
-											hyper = cand 
-											if target_type == 'concept': # hyper is concept
-												ins_of_con_embeddings_cand = ins_of_con_embeddings[cand]
-												num_insts_cand = ins_of_con_embeddings_cand.shape[0]
-												chosen_insts = random.sample(range(num_insts_cand), min(hyperparams['ent_per_con'], num_insts_cand) )
-												cand_embeddings = ins_of_con_embeddings_cand[chosen_insts].to(device)
-												hyper_embeddings = cand_embeddings
-											else: # hyper is instance
-												hyper_embeddings = instance_embeddings[ins2id[hyper]].unsqueeze(0)
 											hypo = giv 
-											hypo_embeddings = giv_embeddings
+											hyper = cand 
 
-										res = model(hypo_embeddings, hyper_embeddings, hypo, hyper, mode = rel)
-										score.append(res['sub_pred'].unsqueeze(0))
+										if hypo in concepts and hyper in concepts:
+											hypo_ents, hyper_ents = sampler.sample(hypo, hyper)
+
+											if hyperparams['variant'] == 'selfatt':
+												rel_type = 'subclass_selfatt'
+											else:
+												rel_type = 'subclass'
+										elif hypo in instances or hyper in instances:
+											if hypo in instances:
+												hyper_ents = sampler.sample_single(hyper, exclude_ins = hypo)
+												if (len(hyper_ents) == 0):
+													continue
+											else:
+												hypo_ents = sampler.sample_single(hypo, exclude_ins = hyper)
+												if (len(hypo_ents) == 0):
+													continue
+											if hyperparams['variant'] == 'selfatt':
+												rel_type = 'instance_selfatt'
+											else:
+												rel_type = 'instance'
 
 										
-									score = torch.cat(score, dim=0).softmax(dim=-1)[:, 1]
 
+										if rel_type in ['subclass', 'subclass_selfatt']:
+											hypo_embs = [  instance_embeddings[ins2id[e['ins_name']]].unsqueeze(0) for e in hypo_ents]
+											hyper_embs = [ instance_embeddings[ins2id[e['ins_name']]].unsqueeze(0)  for e in hyper_ents]
+										elif hypo in instances:
+											hypo_embs = [  instance_embeddings[ins2id[hypo]].unsqueeze(0) ]
+											hyper_embs = [ instance_embeddings[ins2id[e['ins_name']]].unsqueeze(0)  for e in hyper_ents]
+										elif hyper in instances:
+											hypo_embs = [  instance_embeddings[ins2id[e['ins_name']]].unsqueeze(0) for e in hypo_ents]
+											hyper_embs = [  instance_embeddings[ins2id[hyper]].unsqueeze(0) ]
 
+										hypo_embeddings = torch.cat(hypo_embs, dim=0)
+										hyper_embeddings = torch.cat(hyper_embs, dim=0)
+										res = model(hypo_embeddings, hyper_embeddings, hypo, hyper, mode = rel_type)
 
-								else:
+	
+									
 									if target == 'head':
 										feature_tensors = [prototype.expand(target_size, prototype_size), all_candidates, prototype - all_candidates, prototype * all_candidates]
 									else:
 										feature_tensors = [all_candidates, prototype.expand(target_size, prototype_size), all_candidates - prototype, all_candidates * prototype]
 
+									#pdb.set_trace()
 									if self.model_name == 'psn':
 										if rel == 'instance' and hyperparams['separate_classifier']:
 											sub_pred = model.ins_selfatt_classifier(torch.cat(feature_tensors, dim=-1)).squeeze()
@@ -1290,26 +1386,27 @@ class Trainer:
 											sub_pred = model.ins_classifier(torch.cat(feature_tensors, dim=-1)).squeeze()
 										else:
 											sub_pred = model.sub_classifier(torch.cat(feature_tensors, dim=-1)).squeeze()
-
-									score = sub_pred.softmax(dim=-1)[:,1]
-								tops = score.argsort(descending=True).tolist()
-							else:
 									
-								if rel == 'subclass':
-									rel_embedding = model.isA_embedding(torch.tensor(0).to(device))
+									score = sub_pred.softmax(dim=-1)[:,1]
+									tops = score.argsort(descending=True).tolist()
 								else:
-									rel_embedding = model.isA_embedding(torch.tensor(1).to(device))
-								if target == 'head':
-									feature_tensors = all_candidates + rel_embedding - prototype
-								else:
-									feature_tensors = prototype + rel_embedding - all_candidates
-								distance = torch.norm(feature_tensors, p=1, dim=-1) #feature_tensors.abs().sum(dim=1)
-								score = -distance 
-								tops = score.argsort(descending=True).tolist()
+									
+									if rel == 'subclass':
+										rel_embedding = model.isA_embedding(torch.tensor(0).to(device))
+									else:
+										rel_embedding = model.isA_embedding(torch.tensor(1).to(device))
+									if target == 'head':
+										feature_tensors = all_candidates + rel_embedding - prototype
+									else:
+										feature_tensors = prototype + rel_embedding - all_candidates
+									distance = torch.norm(feature_tensors, p=1, dim=-1) #feature_tensors.abs().sum(dim=1)
+									#pdb.set_trace()
+									score = -distance 
+									tops = score.argsort(descending=True).tolist()
 
-							# e.g. tops = [2470, 2606,  954,  ..., 2566, 1346,  262], which means that the 2470th concept scores the highest
+								# e.g. tops = [2470, 2606,  954,  ..., 2566, 1346,  262], 即第2470个概念分数最高，第2606个概念分数其次 
 								
-							for setting in ['raw', 'filter']:
+								countt = 0 
 								for testee in testees:
 									if target_type == 'concept':
 										itestee = con2id[testee]
@@ -1320,7 +1417,12 @@ class Trainer:
 										itestee = candidate_maps[itestee]
 
 									if setting == 'raw':
+										#ranks = {ic: r for r, ic in enumerate(tops)}
+										# 可以得到 {2470: 0, 2606: 1 ...}，即可以根据icon得到排名
+										#rank = ranks[icand]
+										#rank = tops.index(itestee) + 1 
 										tops_ = tops
+
 									else:
 										other_groundtruth = groundtruth.difference(set([testee])) 
 										if target_type == 'concept':
@@ -1336,7 +1438,21 @@ class Trainer:
 											tops_names = [ id2con[candidate_maps_reverse[t]] for t in tops_]
 										else:
 											tops_names = [ id2ins[candidate_maps_reverse[t]] for t in tops_]
+										
+										#if target == 'tail' and countt == 0:
+										#    print('Rel: {0} Giv: {1} Target: {2} Tops10 {3}'.format(rel, giv, target, tops_names[:10]))
+										#    pdb.set_trace()
+										#else:
+										#    countt += 1
 
+									'''
+									if type_constrain:
+										if target_type == 'concept':
+											candidate_idxs = [ con2id[c] for c in Candidates[rel][target]]                                        
+										elif target_type == 'instance':
+											candidate_idxs = [ ins2id[c] for c in Candidates[rel][target]]
+										tops_ = [ t for t in tops_ if (t in candidate_idxs)]
+									'''
 
 									rank = tops_.index(itestee) + 1
 
@@ -1347,14 +1463,27 @@ class Trainer:
 										if rank <= k:
 											hits[setting][target][rel][k] += 1 
 
-					if rel == 'subclass':
-						total_triplets = len(isSubclassOf_triples['test'])
-					else:
-						total_triplets = len(isInstanceOf_triples['test'])
+									#if setting == 'filter' and rel == 'subclass':
+									#    #pdb.set_trace()
+									#    if target == 'head':
+									#        n_hypo = len(concept_instance_info[testee])
+									#        n_hyper = len(concept_instance_info[giv]) 
+									#    else:
+									#        n_hyper = len(concept_instance_info[testee])
+									#        n_hypo = len(concept_instance_info[giv]) 
 
-					assert(count_triples == total_triplets)
 
-					for setting in ['raw', 'filter']:
+									#    pair_mrr[(n_hypo, n_hyper)] = pair_mrr.get((n_hypo, n_hyper), 0) + 1 / rank
+									#    pair_cnt[(n_hypo, n_hyper)] = pair_cnt.get((n_hypo, n_hyper), 0) + 1
+
+
+						if rel == 'subclass':
+							total_triplets = len(isSubclassOf_triples['test'])
+						else:
+							total_triplets = len(isInstanceOf_triples['test'])
+
+						assert(count_triples == total_triplets)
+
 						MR[setting][target][rel] /= total_triplets
 						MRR[setting][target][rel] /= total_triplets
 						for k in ks:
@@ -1365,7 +1494,10 @@ class Trainer:
 							setting, target, rel, hyperparams['type_constrain']
 						))
 
-
+						#if setting == 'filter' and rel == 'subclass':
+						#    for pr in pair_mrr.keys():
+						#        pair_mrr[pr] /= pair_cnt[pr]
+						#    pdb.set_trace()
 
 		raw_subclass_mrr = (MRR['raw']['head']['subclass'] + MRR['raw']['tail']['subclass']) / 2
 		raw_subclass_hits1 = (hits['raw']['head']['subclass'][1] + hits['raw']['tail']['subclass'][1]) / 2
@@ -1439,13 +1571,23 @@ class Trainer:
 		model_name = hyperparams['model_name']
 		ent_per_con = hyperparams['ent_per_con']
 
+		if hyperparams['language'] == 'cn':
+			fixed_num_insts = True
+			if hyperparams['use_probase_text']:
+				text_key = 'text_from_dbpedia_probase'
+			else:
+				text_key = 'text_from_dbpedia'
+			hypo_hint_template = '该物属于概念"{0}"，判断"{1}"是否被"{2}"包含。'
+			single_hint_template = '该物属于概念"{0}"。'
 
-		fixed_num_insts = False 
-		text_key = 'text_from_wikipedia'
+		else:
+			fixed_num_insts = False 
+			text_key = 'text_from_wikipedia'
+			hypo_hint_template = 'This item belongs to concept "{0}". Please judge whether concept "{1}" is contained by concept "{2}". '
+			hyper_hint_template = 'This item belongs to concept "{0}". Please judge whether concept "{1}" contain concept "{2}". '
+			single_hint_template = 'This item belongs to concept "{0}". '
 
-		single_hint_template = 'This item belongs to concept "{0}". '
-
-		concepts = self.concepts 
+		concepts = self.concepts #data_bundle['concept_instance_info'].keys()
 		instances = self.instances 
 		prototype_size = model.prototype_size
 		model.eval()
@@ -1455,39 +1597,16 @@ class Trainer:
 		concept_prototypes = torch.zeros(len(concepts), prototype_size).float()
 		instance_embeddings = torch.zeros(len(instances), prototype_size).float()
 
-		ins_of_con_embeddings = {}
-
 		batch_size = 128
 		num_instances = len(instances)
 		num_concepts = len(concepts)
 
 
 		with torch.no_grad():
-			if hyperparams['variant'] in ['default', 'hybrid']:
-				for con, insts_ in concept_instance_info.items():
-					random_map = [i for i in range(len(insts_))]
-					batch_list = [ random_map[i:i+batch_size] for i in range(0, len(insts_) ,batch_size)] 
-
-					ins_of_con_embeddings[con] = torch.zeros(len(insts_), prototype_size).float()
-					#pdb.set_trace()
-					for batch in batch_list:
-						insts = [ insts_[i] for i in batch]
-						if not hyperparams['freeze_plm']:
-							texts = [ (single_hint_template.format(con) if add_concept_hint else '') + self.instance_info[ins][text_key] for ins in insts]
-							inputs = tokenizer(texts, truncation = True, max_length = max_length, return_tensors='pt', padding=True )
-							inputs.to(device)
-							embeddings = model.bert_embed(**inputs)
-
-						else:
-							insts_idx = torch.tensor([ self.ins2id[ins]  for ins in insts]).to(device)
-							embeddings = model.frozen_bert_embed(insts_idx)
-
-						ins_of_con_embeddings[con][batch] = embeddings.cpu()
-
-
 			random_map = [i for i in range(num_instances)]
 			batch_list = [ random_map[i:i+batch_size] for i in range(0, num_instances ,batch_size)] 
 
+			
 			for batch in batch_list:
 				insts = [ self.id2ins[i] for i in batch]
 				if not hyperparams['freeze_plm']:
@@ -1498,101 +1617,112 @@ class Trainer:
 					inputs.to(device)
 					embeddings = model.bert_embed(**inputs)
 
+					# At test time, such operation is not needed . Because It gets identical results.
+					#embeddings_ = torch.zeros(embeddings.shape)
+					#for ie, embedding in enumerate(embeddings):
+					#    pdb.set_trace()
+					#    emb = embedding.unsqueeze(0)
+					#    res = model(emb, emb, mode = 'instance_selfatt')
+					#    embeddings_[ie] = res['prototype'].cpu()
+
 				else:
+					#pdb.set_trace()
 					insts_idx = torch.tensor([ self.ins2id[ins]  for ins in insts]).to(device)
 					embeddings = model.frozen_bert_embed(insts_idx)
 
 				instance_embeddings[batch] = embeddings.cpu()
-
 			
-			if hyperparams['variant'] in ['selfatt', 'hybrid']:
-				for icon in range(num_concepts):
-					# For every concept con, generate its prototype
-					con = self.id2con[icon]
 
-					'''
-					# for case study
-					con = 'bird'
-					avg_family_resemblance = { ins: 0 for ins in concept_instance_info['bird'] }
-					cnt_instance = { ins: 0 for ins in concept_instance_info['bird'] }  
-					'''
+			for icon in range(num_concepts):
+				# For every concept con, 
+				con = self.id2con[icon]
 
-					if not hyperparams['con_desc']:
-						hyper = hypo = con
-						insts = concept_instance_info[con]
+				'''
+				# case study
+				con = 'bird'
+				avg_family_resemblance = { ins: 0 for ins in concept_instance_info['bird'] }
+				cnt_instance = { ins: 0 for ins in concept_instance_info['bird'] }  
+				'''
 
-						if hyperparams['model_name'] == 'psn':
-							embed_times = max(math.floor((math.log(len(insts)) / math.log(2))) - 1, 1)
-						else:
-							embed_times = 1
+				if not hyperparams['con_desc']:
+					hyper = hypo = con
+					insts = concept_instance_info[con]
 
-						#embed_times = 10000 # for case study
-					
-						sum_prot = torch.zeros(prototype_size).float().to(device)
-						hint = single_hint_template.format(con) if add_concept_hint else ''
-						rel_type = 'subclass_selfatt'
-						for t in range(embed_times):
-							insts = sampler.sample_single(con)
-						
-							if not hyperparams['freeze_plm']:
-								texts = [  hint + e[text_key] for e in insts]
-								inputs = tokenizer(texts, truncation = True, max_length = max_length, return_tensors='pt', padding=True )
-								inputs.to(device)
-								embeddings = model.bert_embed(**inputs)
-							else:
-
-								insts_idx = torch.tensor([ self.ins2id[ins['ins_name']]  for ins in insts]).to(device)
-								embeddings = model.frozen_bert_embed(insts_idx)
-
-							res = model(embeddings, embeddings, con, con, mode = rel_type)
-
-							'''
-							# for case study 
-							insts_name = [ e['ins_name'] for e in insts]
-							for ii, inst in enumerate(insts_name):
-								avg_family_resemblance[inst] += res['family_resemblance'][ii]
-								cnt_instance[inst] += 1
-							'''
-
-							prototype = res['prototype']
-							sum_prot += prototype 
-
-						prototype = sum_prot / embed_times
-
-						'''
-						# for case study
-						for inst in avg_family_resemblance:
-							if cnt_instance[inst]>0:
-								avg_family_resemblance[inst] /= cnt_instance[inst]
-							else:
-								pdb.set_trace()
-						'''
-
+					if hyperparams['model_name'] == 'psn':
+						embed_times = max(math.floor((math.log(len(insts)) / math.log(2))) - 1, 1)
 					else:
+						embed_times = 1
+
+					#embed_times = 10000 # case study
+					
+					sum_prot = torch.zeros(prototype_size).float().to(device)
+					hint = single_hint_template.format(con) if add_concept_hint else ''
+					rel_type = 'subclass_selfatt'
+					for t in range(embed_times):
+						insts = sampler.sample_single(con)
+						
 						if not hyperparams['freeze_plm']:
-							texts = [self.concept_info[con]]  
+							texts = [  hint + e[text_key] for e in insts]
 							inputs = tokenizer(texts, truncation = True, max_length = max_length, return_tensors='pt', padding=True )
 							inputs.to(device)
-							embedding = model.bert_embed(**inputs)
-							prototype = embedding
+							embeddings = model.bert_embed(**inputs)
 						else:
-							con_idx = torch.tensor([icon]).to(device)
-							prototype = model.frozen_bert_embed_concepts(con_idx)
 
-					concept_prototypes[icon] = prototype.cpu()            
+							insts_idx = torch.tensor([ self.ins2id[ins['ins_name']]  for ins in insts]).to(device)
+							embeddings = model.frozen_bert_embed(insts_idx)
+
+						res = model(embeddings, embeddings, con, con, mode = rel_type)
+
+						'''
+						# case study 
+						insts_name = [ e['ins_name'] for e in insts]
+						for ii, inst in enumerate(insts_name):
+							avg_family_resemblance[inst] += res['family_resemblance'][ii]
+							cnt_instance[inst] += 1
+						'''
+
+						prototype = res['prototype']
+						sum_prot += prototype 
+
+					prototype = sum_prot / embed_times
+
+					'''
+					for inst in avg_family_resemblance:
+						if cnt_instance[inst]>0:
+							avg_family_resemblance[inst] /= cnt_instance[inst]
+						else:
+							pdb.set_trace()
+					pdb.set_trace()
+					'''
+
+				else:
+					if not hyperparams['freeze_plm']:
+						texts = [self.concept_info[con]]  
+						# 注意要去掉concept hint ? 
+						inputs = tokenizer(texts, truncation = True, max_length = max_length, return_tensors='pt', padding=True )
+						inputs.to(device)
+						embedding = model.bert_embed(**inputs)
+						prototype = embedding
+					else:
+						con_idx = torch.tensor([icon]).to(device)
+						prototype = model.frozen_bert_embed_concepts(con_idx)
+
+
+				#concept_prototypes[self.con2id[con]] = prototype.cpu()
+				concept_prototypes[icon] = prototype.cpu()            
 		
 		embeddings = {
 			'instance_embeddings': instance_embeddings,
 			'concept_prototypes': concept_prototypes,
-			'ins_of_con_embeddings': ins_of_con_embeddings,
 			'id2con': self.id2con,
 			'id2ins': self.id2ins
 		}
 
 		model.train()
-		with open('embeddings_lp.pkl', 'wb') as fil:
+		with open('embeddings.pkl', 'wb') as fil:
 			pickle.dump(embeddings, fil)
 
+		pdb.set_trace()
 		return embeddings
 
 	def get_best_threshold(self, scores, labels):
@@ -1652,8 +1782,22 @@ class Trainer:
 				break
 
 		accuracy = (TP + TN) / total_all 
+		'''
+		if TP + FP > 0:
+			precision = TP / ( TP + FP)
+		else:
+			precision = float('nan')
+		if TP + FN > 0:
+			recall = TP / ( TP + FN)
+		else:
+			recall[label] = float('nan')
+		if precision + recall > 0:
+			micro_f1 = (2*precision*recall) / (precision + recall)
+		else:
+			micro_f1 = float('nan')
+		'''
 
-		return accuracy, TP, FP, TN, FN 
+		return accuracy, TP, FP, TN, FN #precision, recall, micro_f1
 
 		
 
@@ -1670,7 +1814,7 @@ class Trainer:
 	def save_model(self, epc, metric, metric_val):
 		save_path = self.param_path_template.format(epc, metric)
 		last_path = self.param_path_template.format(self.best_epoch[metric], metric)
-
+		#pdb.set_trace()
 		if self.update_metric(epc, metric, metric_val):
 			if os.path.exists(last_path) and save_path != last_path and epc > self.best_epoch[metric]:
 				os.remove(last_path)
@@ -1690,6 +1834,7 @@ class Trainer:
 			self.test_subclass(epc, selfatt = True, valid = valid)
 			if hyperparams['train_instance_of']:
 				self.test_instance(epc, selfatt = True, valid = valid)
+			#self.link_prediction(epc)
 
 	def debug_signal_handler(self, signal, frame):
 		pdb.set_trace()
@@ -1699,6 +1844,7 @@ def complete_train_dataset(dataset, concepts, add_reverse_label, concept_instanc
 
 	if mode == 'instance':
 		dataset = [d for d in dataset if len(concept_instance_info[d[1]]) > 2]
+		# 保证做的instance of里，我去掉这个instance本身，还能找到至少2个support的实例
 
 	if num_pos != -1:
 		dataset = random.sample(dataset, min(num_pos,len(dataset)) )
@@ -1708,13 +1854,15 @@ def complete_train_dataset(dataset, concepts, add_reverse_label, concept_instanc
 	num_triples_nt = num_triples
 	count_nt = 0
 
+	#pdb.set_trace()
 	while(count_nt < num_triples_nt):
 		if mode == 'subclass':
 			hypo, hyper = random.sample(concepts, 2)
 		elif mode == 'instance':
 			hypo = random.sample(instances, 1)[0]
 			hyper = random.sample(concepts, 1)[0]
-
+		else:
+			pdb.set_trace()
 
 		if not (hypo, hyper, 1) in orig_dataset and not (hypo, hyper, 0) in negative_dataset:
 			negative_dataset.add((hypo, hyper, 0))
@@ -1730,7 +1878,7 @@ def complete_train_dataset(dataset, concepts, add_reverse_label, concept_instanc
 	return dataset_
 
 def complete_test_dataset(dataset, negative_triples, add_reverse_label, valid, concept_instance_info = None, mode = 'subclass' ):
-  
+	#pdb.set_trace()
 	if mode == 'instance':
 		dataset = [d for d in dataset if len(concept_instance_info[d[1]]) > 2]
 
@@ -1745,5 +1893,6 @@ def complete_test_dataset(dataset, negative_triples, add_reverse_label, valid, c
 	if add_reverse_label:
 		reverse_dataset = [ (hyper, hypo, 2) for hypo, hyper, _ in dataset]
 		dataset_ = dataset_ + reverse_dataset
-
+	#random.shuffle(dataset_)
+	#pdb.set_trace()
 	return dataset_
