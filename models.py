@@ -189,7 +189,7 @@ class ProtSiam(nn.Module):
                 rel_embedding = self.isA_embedding(torch.tensor(0).to(device))
             offset = (hypo_prototype + rel_embedding - hyper_prototype)
             
-            distance = torch.norm(offset, p=1, dim = -1) #offset.abs().sum() # L1距离
+            distance = torch.norm(offset, p=2, dim = -1) #offset.abs().sum() # L1距离
             res = {'distance': distance}
 
         #torch.set_printoptions(precision=6)
@@ -208,12 +208,10 @@ class ProtSiam(nn.Module):
             res = {'sub_pred': sub_pred}
         else:
             if mode == 'instance_selfatt':
-                rel_embedding = self.isA_embedding(torch.tensor(1).to(self.bert.device))
+                rel_embedding = 0 #self.isA_embedding(torch.tensor(1).to(self.bert.device))
             else:
-                rel_embedding = self.isA_embedding(torch.tensor(0).to(self.bert.device))
-            #offset = (hypo_prototype + rel_embedding - hyper_prototype)
-            offset = (hypo_prototype - hyper_prototype) # prototypical network
-            #pdb.set_trace()
+                rel_embedding = 0 #self.isA_embedding(torch.tensor(0).to(self.bert.device))
+            offset = (hypo_prototype + rel_embedding - hyper_prototype)
 
             distance = torch.norm(offset, p=2, dim = -1) # offset.abs().sum()
             res = {'distance': distance}
@@ -413,11 +411,11 @@ class ProtVanilla(nn.Module):
             
         else:
             if mode == 'instance':
-                rel_embedding = self.isA_embedding(torch.tensor(1).to(device))
+                rel_embedding = 0 # self.isA_embedding(torch.tensor(1).to(device))
             else:
-                rel_embedding = self.isA_embedding(torch.tensor(0).to(device))
+                rel_embedding = 0 # self.isA_embedding(torch.tensor(0).to(device))
             offset = (hypo_prototype + rel_embedding - hyper_prototype)
-            distance = torch.norm(offset, p=1, dim=1)#offset.abs().sum() # L1距离
+            distance = torch.norm(offset, p=2, dim=1)#offset.abs().sum() # L1距离
             res = {'distance': distance}
 
         return res
@@ -432,15 +430,18 @@ class ProtVanilla(nn.Module):
             res = {'sub_pred': sub_pred}
         else:
             if mode == 'instance_selfatt':
-                rel_embedding = self.isA_embedding(torch.tensor(1).to(self.bert.device))
+                rel_embedding = 0#self.isA_embedding(torch.tensor(1).to(self.bert.device))
             else:
-                rel_embedding = self.isA_embedding(torch.tensor(0).to(self.bert.device))
+                rel_embedding = 0#self.isA_embedding(torch.tensor(0).to(self.bert.device))
             offset = (hypo_prototype + rel_embedding - hyper_prototype)
 
-            distance = torch.norm(offset, p=1, dim = -1) # offset.abs().sum()
+            distance = torch.norm(offset, p=2, dim = -1) # offset.abs().sum()
             res = {'distance': distance}
 
         return res
+
+
+
 
     def bert_embed(
         self,
