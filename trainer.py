@@ -241,10 +241,11 @@ class Trainer:
 		if self.load_epoch>=10:
 			epc = self.load_epoch
 			if hyperparams['variant'] in ['default', 'hybrid']:
+				self.link_prediction(epc)
 				self.test_subclass(epc, valid = True)
 				if hyperparams['train_instance_of']:
 					self.test_instance(epc, valid = True)
-				#self.link_prediction(epc)
+				
 			if hyperparams['variant'] in ['selfatt', 'hybrid']:
 				self.test_subclass(epc, selfatt = True, valid = True)
 				if hyperparams['train_instance_of']:
@@ -524,11 +525,11 @@ class Trainer:
 					self.test_subclass(epc, valid = True)
 					if hyperparams['train_instance_of']:
 						self.test_instance(epc, valid = True)
-					#self.link_prediction(epc)
-					save_path = self.param_path_template.format(epc, 'forcesave')
+					self.link_prediction(epc)
+					#save_path = self.param_path_template.format(epc, 'forcesave')
 			
-					torch.save(self.model.state_dict(), save_path)
-					print('Parameters Force Saved into {} for link prediciton evaluation'.format(save_path))
+					#torch.save(self.model.state_dict(), save_path)
+					#print('Parameters Force Saved into {} for link prediciton evaluation'.format(save_path))
 					
 				if hyperparams['variant'] in ['selfatt', 'hybrid']:
 					self.test_subclass(epc, selfatt = True, valid = True)
@@ -1154,6 +1155,11 @@ class Trainer:
 				for setting in ['raw', 'filter']
 			}
 
+		# Temporally, just see subclass performance in valid
+		if hyperparams['variant'] == 'default' and valid:
+			rels = ['subclass']
+		else:
+			rels = ['subclass', 'instance']
 
 		with torch.no_grad():
 			for rel in ['subclass', 'instance']:
