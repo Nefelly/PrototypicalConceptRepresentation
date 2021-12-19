@@ -1162,7 +1162,7 @@ class Trainer:
 			rels = ['subclass', 'instance']
 
 		with torch.no_grad():
-			for rel in ['subclass', 'instance']:
+			for rel in rels: #['subclass', 'instance']:
 				for target in ['head', 'tail']:
 					#for setting in ['raw', 'filter']:
 
