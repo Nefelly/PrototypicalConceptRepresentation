@@ -1057,9 +1057,10 @@ class Trainer:
 		
 		embeddings = self.generate_concept_prototype()
 		# for quick use of already generated representations
-		with open('embeddings_lp.pkl', 'rb') as fil:
-			embeddings = pickle.load(fil)
+		#with open('embeddings_lp.pkl', 'rb') as fil:
+		#	embeddings = pickle.load(fil)
 		
+		#pdb.set_trace()
 
 		instance_embeddings = embeddings['instance_embeddings'].to(device)
 		concept_prototypes = embeddings['concept_prototypes']
@@ -1184,7 +1185,8 @@ class Trainer:
 
 
 					count_triples = 0
-					for giv in tqdm(givens):        
+					for giv in tqdm((givens)): 
+						
 						testees = Groundtruth[rel][target]['test'][giv]
 						groundtruth = Groundtruth[rel][target]['all'][giv]
 	  
@@ -1236,7 +1238,8 @@ class Trainer:
 									if giv in concepts:
 										ins_of_con_embeddings_giv = ins_of_con_embeddings[giv]
 										num_insts_giv = ins_of_con_embeddings_giv.shape[0]
-										chosen_insts = random.sample(range(num_insts_giv), min(hyperparams['ent_per_con'], num_insts_giv) )
+										#chosen_insts = random.sample(range(num_insts_giv), min(hyperparams['ent_per_con'] * 2 - 1, num_insts_giv) )
+										chosen_insts = [i for i in range(num_insts_giv)][: hyperparams['ent_per_con'] * 2 - 1]
 										
 										giv_embeddings = ins_of_con_embeddings_giv[chosen_insts].to(device)
 									else:
@@ -1254,7 +1257,8 @@ class Trainer:
 											if target_type == 'concept': # hypo is concept
 												ins_of_con_embeddings_cand = ins_of_con_embeddings[cand]
 												num_insts_cand = ins_of_con_embeddings_cand.shape[0]
-												chosen_insts = random.sample(range(num_insts_cand), min(hyperparams['ent_per_con'], num_insts_cand) )
+												#chosen_insts = random.sample(range(num_insts_cand), min(hyperparams['ent_per_con'] * 2 - 1, num_insts_cand) )
+												chosen_insts = [i for i in range(num_insts_cand)][: hyperparams['ent_per_con'] * 2 - 1]
 												cand_embeddings = ins_of_con_embeddings_cand[chosen_insts].to(device)
 												hypo_embeddings = cand_embeddings
 											else: # hypo is instance
@@ -1277,10 +1281,8 @@ class Trainer:
 										res = model(hypo_embeddings, hyper_embeddings, hypo, hyper, mode = rel)
 										score.append(res['sub_pred'].unsqueeze(0))
 
-										
+
 									score = torch.cat(score, dim=0).softmax(dim=-1)[:, 1]
-
-
 
 								else:
 									if target == 'head':
