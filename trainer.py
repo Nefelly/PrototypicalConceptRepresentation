@@ -14,7 +14,7 @@ import numpy as np
 
 save_folder = './params/'
 
-add_concept_hint = True#False
+add_concept_hint = True
 trainable_models = ['psn', 'prot_vanilla']
 
 gradual_epochs = 0.001
@@ -62,6 +62,10 @@ class Trainer:
 		self.id2ins = { ic: ins for ic, ins in enumerate(sorted(instances))}
 
 		additional_info = ''
+		additional_info = additional_info + 'bert-lr-{}_'.format(hyperparams['bert_lr'])
+		additional_info = additional_info + 'model-lr-{}_'.format(hyperparams['model_lr'])
+
+		#pdb.set_trace()
 		if hyperparams['freeze_plm']:
 			additional_info = additional_info + 'freeze_'
 		if hyperparams['train_MLM']:
@@ -189,7 +193,8 @@ class Trainer:
 
 
 	def run(self):
-		#self.train()
+		self.train()
+		
 		try:
 			self.train()
 		except:
@@ -387,6 +392,7 @@ class Trainer:
 							else:
 								hypo_texts = [concept_info[hypo]]
 							texts = hypo_texts + hyper_texts
+							
 							inputs = tokenizer(texts, truncation = True, max_length = max_length, return_tensors='pt', padding=True )
 							inputs.to(device)
 							embeddings = model.bert_embed(**inputs)
@@ -418,7 +424,6 @@ class Trainer:
 
 						hyper_res = model(hyper_embeddings, hyper_embeddings, hyper, hyper, mode = rel_type)
 						hyper_prototype = hyper_res['prototype']
-
 
 						res = model.judge(hypo_prototype, hyper_prototype, mode = rel_type)
 					

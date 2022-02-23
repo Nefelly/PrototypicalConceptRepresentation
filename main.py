@@ -72,7 +72,7 @@ if __name__ == '__main__':
 	elif arg.language == 'en':
 		#with open('/home/nefeli/data/v2_en/{0}_en_dataset.pkl'.format(arg.data), 'rb') as fil:
 		#data_path = '/home/nefeli/data/v2_en/{0}_en_dataset.pkl'.format(arg.data)
-		
+		#pdb.set_trace()
 		data_path = '/mnt/data/nefeli/data/v2_en/{0}_en_dataset.pkl'.format(arg.data)
 		#data_path = '/mnt/data/nefeli/data/v2_en/{0}_en_dataset_138.pkl'.format(arg.data)
 		#'/home/nefeli/data/v2_en/{0}_en_dataset.pkl'.format(arg.data) #'/home/kw/nf/data/v2_en/{0}_en_dataset.pkl'.format(arg.data)
@@ -80,7 +80,7 @@ if __name__ == '__main__':
 		with open(data_path, 'rb') as fil:
 			data_bundle = pickle.load(fil)
 
-
+		#pdb.set_trace()
 		identifier = 'en_{0}'.format(arg.data)
 
 		print('Data path: ', data_path)
@@ -149,6 +149,8 @@ if __name__ == '__main__':
 		optimizer = torch.optim.AdamW(param_group)
 
 	hyperparams = {
+		'bert_lr': arg.bert_lr,
+		'model_lr': arg.model_lr,
 		'batch_size': arg.batch_size,
 		'epoch': arg.epoch,
 		'model_name': arg.model,
