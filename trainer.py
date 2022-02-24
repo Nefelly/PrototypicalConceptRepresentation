@@ -224,10 +224,10 @@ class Trainer:
 		fixed_num_insts = False 
 		if hyperparams['language'] == 'zh':
 			text_key = 'text'
+			single_hint_template = '该物属于概念"{0}"。'
 		else:
 			text_key = 'text_from_wikipedia'
-
-		single_hint_template = 'This item belongs to concept "{0}". '
+			single_hint_template = 'This item belongs to concept "{0}". '
 
 		concepts = self.data_bundle['concept_instance_info'].keys()
 
@@ -352,7 +352,7 @@ class Trainer:
 								hypo_texts = [  hypo_hint + e[text_key] for e in hypo_ents]
 								hyper_texts = [  hyper_hint + instance_info[hyper][text_key]]
 						   
-
+							#pdb.set_trace()
 							texts = hypo_texts + hyper_texts
 							inputs = tokenizer(texts, truncation = True, max_length = max_length, return_tensors='pt', padding=True )
 							inputs.to(device)
@@ -570,10 +570,10 @@ class Trainer:
 		fixed_num_insts = False 
 		if hyperparams['language'] == 'zh':
 			text_key = 'text'
+			single_hint_template = '该物属于概念"{0}"。'
 		else:
 			text_key = 'text_from_wikipedia'
-
-		single_hint_template = 'This item belongs to concept "{0}". '
+			single_hint_template = 'This item belongs to concept "{0}". '
 
 		concepts = self.data_bundle['concept_instance_info'].keys()
 
@@ -809,10 +809,10 @@ class Trainer:
 		fixed_num_insts = False 
 		if hyperparams['language'] == 'zh':
 			text_key = 'text'
+			single_hint_template = '该物属于概念"{0}"。'
 		else:
 			text_key = 'text_from_wikipedia'
-
-		single_hint_template = 'This item belongs to concept "{0}". '
+			single_hint_template = 'This item belongs to concept "{0}". '
 
 		concepts = self.data_bundle['concept_instance_info'].keys()
 
@@ -1466,10 +1466,10 @@ class Trainer:
 		fixed_num_insts = False 
 		if hyperparams['language'] == 'zh':
 			text_key = 'text'
+			single_hint_template = '该物属于概念"{0}"。'
 		else:
 			text_key = 'text_from_wikipedia'
-
-		single_hint_template = 'This item belongs to concept "{0}". '
+			single_hint_template = 'This item belongs to concept "{0}". '
 
 		concepts = self.concepts 
 		instances = self.instances 
