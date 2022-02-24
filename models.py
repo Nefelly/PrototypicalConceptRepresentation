@@ -240,7 +240,7 @@ class ProtSiam(nn.Module):
             output_attentions=output_attentions,
         )
 
-        if self.use_cls_token:
+        if self.use_cls_token or len(outputs) == 1:
             pooled_output = outputs[0][:, 0, :]
         else:
             pooled_output = outputs[1]
@@ -466,7 +466,7 @@ class ProtVanilla(nn.Module):
             output_attentions=output_attentions,
         )
 
-        if self.use_cls_token:
+        if self.use_cls_token or len(outputs) == 1:
             pooled_output = outputs[0][:, 0, :]
         else:
             pooled_output = outputs[1]

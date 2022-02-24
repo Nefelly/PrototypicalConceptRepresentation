@@ -162,11 +162,8 @@ class Trainer:
 		concept_hint_embeddings = torch.zeros(len(concepts), dimension).float().to(device)
 
 		hyperparams = self.hyperparams
-		if hyperparams['language'] == 'cn':
-			if hyperparams['use_probase_text']:
-				text_key = 'text_from_dbpedia_probase'
-			else:
-				text_key = 'text_from_dbpedia'
+		if hyperparams['language'] == 'zh':
+			text_key = 'text'
 		else:
 			text_key = 'text_from_wikipedia'
 
@@ -231,22 +228,15 @@ class Trainer:
 		model_name = hyperparams['model_name']
 		ent_per_con = hyperparams['ent_per_con']
 		
-		if hyperparams['language'] == 'cn':
-			fixed_num_insts = True
-			if hyperparams['use_probase_text']:
-				text_key = 'text_from_dbpedia_probase'
-			else:
-				text_key = 'text_from_dbpedia'
-			hypo_hint_template = '该物属于概念"{0}"，判断"{1}"是否被"{2}"包含。'
-			hyper_hint_template = '该物属于概念"{0}"，判断"{1}"是否包含"{2}"。'
+		fixed_num_insts = False
+		if hyperparams['language'] == 'zh':
+			text_key = 'text'
 			single_hint_template = '该物属于概念"{0}"。'
 
 		else:
-			fixed_num_insts = False 
 			text_key = 'text_from_wikipedia'
-			hypo_hint_template = 'This item belongs to concept "{0}". Please judge whether concept "{1}" is contained by concept "{2}". '
-			hyper_hint_template = 'This item belongs to concept "{0}". Please judge whether concept "{1}" contain concept "{2}". '
 			single_hint_template = 'This item belongs to concept "{0}". '
+
 
 		concepts = self.data_bundle['concept_instance_info'].keys()
 
@@ -618,21 +608,13 @@ class Trainer:
 		model_name = hyperparams['model_name']
 		ent_per_con = hyperparams['ent_per_con']
 
-		if hyperparams['language'] == 'cn':
-			fixed_num_insts = True
-			if hyperparams['use_probase_text']:
-				text_key = 'text_from_dbpedia_probase'
-			else:
-				text_key = 'text_from_dbpedia'
-			hypo_hint_template = '该物属于概念"{0}"，判断"{1}"是否被"{2}"包含。'
-			hyper_hint_template = '该物属于概念"{0}"，判断"{1}"是否包含"{2}"。'
+		fixed_num_insts = False
+		if hyperparams['language'] == 'zh':
+			text_key = 'text'
 			single_hint_template = '该物属于概念"{0}"。'
 
 		else:
-			fixed_num_insts = False 
 			text_key = 'text_from_wikipedia'
-			hypo_hint_template = 'This item belongs to concept "{0}". Please judge whether concept "{1}" is contained by concept "{2}". '
-			hyper_hint_template = 'This item belongs to concept "{0}". Please judge whether concept "{1}" contain concept "{2}". '
 			single_hint_template = 'This item belongs to concept "{0}". '
 
 		concepts = self.data_bundle['concept_instance_info'].keys()
@@ -914,22 +896,14 @@ class Trainer:
 		model_name = hyperparams['model_name']
 		ent_per_con = hyperparams['ent_per_con']
 
-		if hyperparams['language'] == 'cn':
-			fixed_num_insts = True
-			if hyperparams['use_probase_text']:
-				text_key = 'text_from_dbpedia_probase'
-			else:
-				text_key = 'text_from_dbpedia'
-			hypo_hint_template = '该物属于概念"{0}"，判断"{1}"是否被"{2}"包含。'
-			hyper_hint_template = '该物属于概念"{0}"，判断"{1}"是否包含"{2}"。'
+		fixed_num_insts = False
+		if hyperparams['language'] == 'zh':
+			text_key = 'text'
 			single_hint_template = '该物属于概念"{0}"。'
 
 		else:
-			fixed_num_insts = False 
 			text_key = 'text_from_wikipedia'
-			hypo_hint_template = 'This item belongs to concept"{0}". Please judge whether concept "{1}" is contained by concept "{2}".'
-			hyper_hint_template = 'This item belongs to concept"{0}". Please judge whether concept "{1}" contain concept "{2}".'
-			single_hint_template = 'This item belongs to concept "{0}". '
+			single_hint_template = 'This item belongs to concept "{0}". ' 
 
 		concepts = self.data_bundle['concept_instance_info'].keys()
 		evaluate_threshold = hyperparams['evaluate_threshold']
@@ -1607,20 +1581,13 @@ class Trainer:
 		model_name = hyperparams['model_name']
 		ent_per_con = hyperparams['ent_per_con']
 
-		if hyperparams['language'] == 'cn':
-			fixed_num_insts = True
-			if hyperparams['use_probase_text']:
-				text_key = 'text_from_dbpedia_probase'
-			else:
-				text_key = 'text_from_dbpedia'
-			hypo_hint_template = '该物属于概念"{0}"，判断"{1}"是否被"{2}"包含。'
+		fixed_num_insts = False
+		if hyperparams['language'] == 'zh':
+			text_key = 'text'
 			single_hint_template = '该物属于概念"{0}"。'
 
 		else:
-			fixed_num_insts = False 
 			text_key = 'text_from_wikipedia'
-			hypo_hint_template = 'This item belongs to concept "{0}". Please judge whether concept "{1}" is contained by concept "{2}". '
-			hyper_hint_template = 'This item belongs to concept "{0}". Please judge whether concept "{1}" contain concept "{2}". '
 			single_hint_template = 'This item belongs to concept "{0}". '
 
 		concepts = self.concepts #data_bundle['concept_instance_info'].keys()
