@@ -159,11 +159,8 @@ class Trainer:
 		concept_hint_embeddings = torch.zeros(len(concepts), dimension).float().to(device)
 
 		hyperparams = self.hyperparams
-		if hyperparams['language'] == 'cn':
-			if hyperparams['use_probase_text']:
-				text_key = 'text_from_dbpedia_probase'
-			else:
-				text_key = 'text_from_dbpedia'
+		if hyperparams['language'] == 'zh':
+			text_key = 'text'
 		else:
 			text_key = 'text_from_wikipedia'
 
@@ -225,7 +222,10 @@ class Trainer:
 		
 
 		fixed_num_insts = False 
-		text_key = 'text_from_wikipedia'
+		if hyperparams['language'] == 'zh':
+			text_key = 'text'
+		else:
+			text_key = 'text_from_wikipedia'
 
 		single_hint_template = 'This item belongs to concept "{0}". '
 
@@ -568,7 +568,10 @@ class Trainer:
 
 
 		fixed_num_insts = False 
-		text_key = 'text_from_wikipedia'
+		if hyperparams['language'] == 'zh':
+			text_key = 'text'
+		else:
+			text_key = 'text_from_wikipedia'
 
 		single_hint_template = 'This item belongs to concept "{0}". '
 
@@ -804,7 +807,10 @@ class Trainer:
 
 
 		fixed_num_insts = False 
-		text_key = 'text_from_wikipedia'
+		if hyperparams['language'] == 'zh':
+			text_key = 'text'
+		else:
+			text_key = 'text_from_wikipedia'
 
 		single_hint_template = 'This item belongs to concept "{0}". '
 
@@ -1458,7 +1464,10 @@ class Trainer:
 
 
 		fixed_num_insts = False 
-		text_key = 'text_from_wikipedia'
+		if hyperparams['language'] == 'zh':
+			text_key = 'text'
+		else:
+			text_key = 'text_from_wikipedia'
 
 		single_hint_template = 'This item belongs to concept "{0}". '
 

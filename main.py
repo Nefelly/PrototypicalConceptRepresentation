@@ -9,7 +9,7 @@ import pickle
 import numpy as np
 
 from transformers import BertTokenizer, BertModel, BertConfig, BertForMaskedLM
-from transformers import AutoTokenizer, AutoModel, AutoConfig
+from transformers import AutoTokenizer, AutoModel, AutoConfig, AlbertForMaskedLM
 from models import ProtSiam, ProtVanilla
 from trainer import Trainer
 from utils import *
@@ -65,10 +65,14 @@ if __name__ == '__main__':
 		device = torch.device('cpu')
 
 	if arg.language == 'zh':
-		with open('10000000_dataset_v2.pkl', 'rb') as fil:
+		data_path = '/mnt/data/nefeli/data/v2_en/{0}_cn_dataset.pkl'.format(arg.data)
+		with open(data_path, 'rb') as fil:
 			data_bundle = pickle.load(fil)
-		bert_pretrained = "bert-base-chinese"
-		identifier = 'cn'
+		identifier = 'cn_{0}'.format(arg.data)
+
+		bert_pretrained = 'voidful/albert_chinese_tiny'
+		bertmodel = AlbertForMaskedLM.from_pretrained(bert_pretrained).albert
+
 	elif arg.language == 'en':
 		#with open('/home/nefeli/data/v2_en/{0}_en_dataset.pkl'.format(arg.data), 'rb') as fil:
 		#data_path = '/home/nefeli/data/v2_en/{0}_en_dataset.pkl'.format(arg.data)
@@ -93,6 +97,7 @@ if __name__ == '__main__':
 			bert_pretrained = "prajjwal1/bert-mini"
 		elif arg.plm == 'bert_small':
 			bert_pretrained = "prajjwal1/bert-small"
+		bertmodel = AutoModel.from_pretrained(bert_pretrained)
 
 	if arg.add_reverse_label:
 		num_labels = 3
@@ -102,7 +107,7 @@ if __name__ == '__main__':
 	#pdb.set_trace()
 	config = AutoConfig.from_pretrained(bert_pretrained, num_labels=num_labels)
 	tokenizer = AutoTokenizer.from_pretrained(bert_pretrained)
-	bertmodel = AutoModel.from_pretrained(bert_pretrained)
+	
 	
 	if arg.train_MLM:
 		bertMLMcls = BertForMaskedLM(bertmodel.config).cls
