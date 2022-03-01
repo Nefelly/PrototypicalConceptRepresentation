@@ -18,13 +18,10 @@ add_concept_hint = True
 trainable_models = ['psn', 'prot_vanilla']
 
 gradual_epochs = 0.001
-on_51 = True
-if on_51:
-	max_length = 512
-	sample_limit = 1000000000
-else:
-	max_length = 400
-	sample_limit = 1000000000
+
+max_length = 512
+sample_limit = 1000000000
+
 
 distance_margin = 9 #Following KEPLER
 distance_eps = 1e-10
@@ -162,7 +159,10 @@ class Trainer:
 		if hyperparams['language'] == 'zh':
 			text_key = 'text'
 		else:
-			text_key = 'text_from_wikipedia'
+			if hyperparams['data'].startswith('wordnet'):
+				text_key = 'text'
+			else:
+				text_key = 'text_from_wikipedia'
 
 		model.eval()
 		with torch.no_grad():
@@ -226,7 +226,10 @@ class Trainer:
 			text_key = 'text'
 			single_hint_template = '该物属于概念"{0}"。'
 		else:
-			text_key = 'text_from_wikipedia'
+			if hyperparams['data'].startswith('wordnet'):
+				text_key = 'text'
+			else:
+				text_key = 'text_from_wikipedia'
 			single_hint_template = 'This item belongs to concept "{0}". '
 
 		concepts = self.data_bundle['concept_instance_info'].keys()
@@ -299,6 +302,7 @@ class Trainer:
 			count_instance_selfatt = 0
 
 			for bt, batch in tqdm(enumerate(batch_list)):
+			
 				triple = dataset[batch[0]]
 				hypo, hyper, label = triple
 
@@ -339,8 +343,13 @@ class Trainer:
 					if not hyperparams['con_desc']: # use description of concept instead of the concept's instances' descriptions
 						if not hyperparams['freeze_plm']:
 
-							hypo_hint = single_hint_template.format(hypo) if add_concept_hint else ''
-							hyper_hint = single_hint_template.format(hyper) if add_concept_hint else ''
+							if not hyperparams['data'].startswith('wordnet'):
+								hypo_hint = single_hint_template.format(hypo) if add_concept_hint else ''
+								hyper_hint = single_hint_template.format(hyper) if add_concept_hint else ''
+							else:
+								hypo_hint = single_hint_template.format(self.data_bundle['alias'][hypo]) if add_concept_hint else ''
+								hyper_hint = single_hint_template.format(self.data_bundle['alias'][hyper]) if add_concept_hint else ''
+
 
 							if rel_type in ['subclass', 'subclass_selfatt']:
 								hypo_texts = [  hypo_hint + e[text_key] for e in hypo_ents]
@@ -572,7 +581,10 @@ class Trainer:
 			text_key = 'text'
 			single_hint_template = '该物属于概念"{0}"。'
 		else:
-			text_key = 'text_from_wikipedia'
+			if hyperparams['data'].startswith('wordnet'):
+				text_key = 'text'
+			else:
+				text_key = 'text_from_wikipedia'
 			single_hint_template = 'This item belongs to concept "{0}". '
 
 		concepts = self.data_bundle['concept_instance_info'].keys()
@@ -650,8 +662,12 @@ class Trainer:
 					if not hyperparams['con_desc']:
 						if not hyperparams['freeze_plm']:
  
-							hypo_hint = single_hint_template.format(hypo) if add_concept_hint else ''
-							hyper_hint = single_hint_template.format(hyper) if add_concept_hint else ''
+							if not hyperparams['data'].startswith('wordnet'):
+								hypo_hint = single_hint_template.format(hypo) if add_concept_hint else ''
+								hyper_hint = single_hint_template.format(hyper) if add_concept_hint else ''
+							else:
+								hypo_hint = single_hint_template.format(self.data_bundle['alias'][hypo]) if add_concept_hint else ''
+								hyper_hint = single_hint_template.format(self.data_bundle['alias'][hyper]) if add_concept_hint else ''
 	
 							hypo_texts = [  hypo_hint + e[text_key] for e in hypo_ents]
 							hyper_texts = [  hyper_hint + e[text_key] for e in hyper_ents]
@@ -811,7 +827,10 @@ class Trainer:
 			text_key = 'text'
 			single_hint_template = '该物属于概念"{0}"。'
 		else:
-			text_key = 'text_from_wikipedia'
+			if hyperparams['data'].startswith('wordnet'):
+				text_key = 'text'
+			else:
+				text_key = 'text_from_wikipedia'
 			single_hint_template = 'This item belongs to concept "{0}". '
 
 		concepts = self.data_bundle['concept_instance_info'].keys()
@@ -885,8 +904,12 @@ class Trainer:
 					if not hyperparams['con_desc']:
 						if not hyperparams['freeze_plm']:
 
-							hypo_hint = single_hint_template.format(hypo) if add_concept_hint else ''
-							hyper_hint = single_hint_template.format(hyper) if add_concept_hint else ''
+							if not hyperparams['data'].startswith('wordnet'):
+								hypo_hint = single_hint_template.format(hypo) if add_concept_hint else ''
+								hyper_hint = single_hint_template.format(hyper) if add_concept_hint else ''
+							else:
+								hypo_hint = single_hint_template.format(self.data_bundle['alias'][hypo]) if add_concept_hint else ''
+								hyper_hint = single_hint_template.format(self.data_bundle['alias'][hyper]) if add_concept_hint else ''
 
 
 							if hypo in instances:
@@ -1177,7 +1200,7 @@ class Trainer:
 			for rel in rels: #['subclass', 'instance']:
 				for target in ['head', 'tail']:
 					#for setting in ['raw', 'filter']:
-
+					count_triples = 0 
 					if rel == 'subclass':
 						givens = concepts 
 						targets = concepts 
@@ -1193,9 +1216,7 @@ class Trainer:
 							#targets = concepts
 							given_type = 'instance'
 							target_type = 'concept'
-
-
-					count_triples = 0
+					
 					for giv in tqdm((givens)): 
 						
 						testees = Groundtruth[rel][target]['test'][giv]
@@ -1206,7 +1227,7 @@ class Trainer:
 							
 
 						if len(testees) > 0:
-							count_triples += len(testees)
+							#count_triples += len(testees)
 
 							if given_type == 'concept':
 								igiv = con2id[giv]
@@ -1331,7 +1352,8 @@ class Trainer:
 								tops = score.argsort(descending=True).tolist()
 
 							# e.g. tops = [2470, 2606,  954,  ..., 2566, 1346,  262], which means that the 2470th concept scores the highest
-								
+							
+							count_triples += len(testees)
 							for setting in ['raw', 'filter']:
 								for testee in testees:
 									if target_type == 'concept':
@@ -1365,15 +1387,25 @@ class Trainer:
 
 									MRR[setting][target][rel] += 1/rank 
 									MR[setting][target][rel] += rank 
-		
+
+
 									for k in ks:
 										if rank <= k:
 											hits[setting][target][rel][k] += 1 
 
+							if hyperparams['variant'] == 'default' and valid and count_triples >= 100:
+								break 
+
+					if not (hyperparams['variant'] == 'default' and valid):
+						if (count_triples != len(isSubclassOf_triples['test'])) and (count_triples != len(isInstanceOf_triples['test'])):
+							print('Wrong 1381 count triples {} {} {}'.format(count_triples, len(isSubclassOf_triples['test']), len(isInstanceOf_triples['test'])))
+							pdb.set_trace()
+
+
 					if rel == 'subclass':
-						total_triplets = len(isSubclassOf_triples['test'])
+						total_triplets = count_triples#len(isSubclassOf_triples['test'])
 					else:
-						total_triplets = len(isInstanceOf_triples['test'])
+						total_triplets = count_triples#len(isInstanceOf_triples['test'])
 
 					assert(count_triples == total_triplets)
 
@@ -1468,7 +1500,10 @@ class Trainer:
 			text_key = 'text'
 			single_hint_template = '该物属于概念"{0}"。'
 		else:
-			text_key = 'text_from_wikipedia'
+			if hyperparams['data'].startswith('wordnet'):
+				text_key = 'text'
+			else:
+				text_key = 'text_from_wikipedia'
 			single_hint_template = 'This item belongs to concept "{0}". '
 
 		concepts = self.concepts 
@@ -1483,7 +1518,7 @@ class Trainer:
 
 		ins_of_con_embeddings = {}
 
-		batch_size = 128
+		batch_size = 64
 		num_instances = len(instances)
 		num_concepts = len(concepts)
 
@@ -1499,7 +1534,11 @@ class Trainer:
 					for batch in batch_list:
 						insts = [ insts_[i] for i in batch]
 						if not hyperparams['freeze_plm']:
-							texts = [ (single_hint_template.format(con) if add_concept_hint else '') + self.instance_info[ins][text_key] for ins in insts]
+							if not hyperparams['data'].startswith('wordnet'):
+								texts = [ (single_hint_template.format(con) if add_concept_hint else '') + self.instance_info[ins][text_key] for ins in insts]
+							else:
+								texts = [ (single_hint_template.format(self.data_bundle['alias'][con]) if add_concept_hint else '') + self.instance_info[ins][text_key] for ins in insts]
+							
 							inputs = tokenizer(texts, truncation = True, max_length = max_length, return_tensors='pt', padding=True )
 							inputs.to(device)
 							embeddings = model.bert_embed(**inputs)
@@ -1517,8 +1556,10 @@ class Trainer:
 			for batch in batch_list:
 				insts = [ self.id2ins[i] for i in batch]
 				if not hyperparams['freeze_plm']:
-					
-					texts = [ (single_hint_template.format(ins) if add_concept_hint else '') + self.instance_info[ins][text_key] for ins in insts]
+					if not hyperparams['data'].startswith('wordnet'):
+						texts = [ (single_hint_template.format(ins) if add_concept_hint else '') + self.instance_info[ins][text_key] for ins in insts]
+					else:
+						texts = [ (single_hint_template.format(self.data_bundle['alias'][ins]) if add_concept_hint else '') + self.instance_info[ins][text_key] for ins in insts]
 
 					inputs = tokenizer(texts, truncation = True, max_length = max_length, return_tensors='pt', padding=True )
 					inputs.to(device)
@@ -1555,7 +1596,11 @@ class Trainer:
 						#embed_times = 10000 # for case study
 					
 						sum_prot = torch.zeros(prototype_size).float().to(device)
-						hint = single_hint_template.format(con) if add_concept_hint else ''
+						if not hyperparams['data'].startswith('wordnet'):
+							hint = single_hint_template.format(con) if add_concept_hint else ''
+						else:
+							hint = single_hint_template.format(self.data_bundle['alias'][con]) if add_concept_hint else ''
+
 						rel_type = 'subclass_selfatt'
 						for t in range(embed_times):
 							insts = sampler.sample_single(con)
@@ -1566,7 +1611,6 @@ class Trainer:
 								inputs.to(device)
 								embeddings = model.bert_embed(**inputs)
 							else:
-
 								insts_idx = torch.tensor([ self.ins2id[ins['ins_name']]  for ins in insts]).to(device)
 								embeddings = model.frozen_bert_embed(insts_idx)
 
@@ -1618,6 +1662,8 @@ class Trainer:
 		model.train()
 		with open('embeddings_lp.pkl', 'wb') as fil:
 			pickle.dump(embeddings, fil)
+
+		#pdb.set_trace()
 
 		return embeddings
 

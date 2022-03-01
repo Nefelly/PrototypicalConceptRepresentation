@@ -99,6 +99,51 @@ if __name__ == '__main__':
 			bert_pretrained = "prajjwal1/bert-small"
 		bertmodel = AutoModel.from_pretrained(bert_pretrained)
 
+	'''
+	concept_ins = data_bundle['concept_instance_info']
+	instance_info = data_bundle['instance_info']
+	ratio_1 = len([k for k, v in concept_ins.items() if len(v) == 1]) / len(concept_ins)
+	ratio_2 = len([k for k, v in concept_ins.items() if len(v) == 2]) / len(concept_ins) + ratio_1
+	ratio_3 = len([k for k, v in concept_ins.items() if len(v) == 3]) / len(concept_ins) + ratio_2
+	ratio_4 = len([k for k, v in concept_ins.items() if len(v) == 4]) / len(concept_ins) + ratio_3
+	ratio_5 = len([k for k, v in concept_ins.items() if len(v) == 5]) / len(concept_ins) + ratio_4
+	ratio_6 = len([k for k, v in concept_ins.items() if len(v) == 6]) / len(concept_ins) + ratio_5
+	ratio_7 = len([k for k, v in concept_ins.items() if len(v) == 7]) / len(concept_ins) + ratio_6
+	ratio_8 = len([k for k, v in concept_ins.items() if len(v) == 8]) / len(concept_ins) + ratio_7
+	ratio_9 = len([k for k, v in concept_ins.items() if len(v) == 9]) / len(concept_ins) + ratio_8
+	ratio_10 = len([k for k, v in concept_ins.items() if len(v) == 10]) / len(concept_ins) + ratio_9
+	ratio_11 = len([k for k, v in concept_ins.items() if len(v) == 11]) / len(concept_ins) + ratio_10
+	ratio_12 = len([k for k, v in concept_ins.items() if len(v) == 12]) / len(concept_ins) + ratio_11
+	print(ratio_1, ratio_2, ratio_3, ratio_4, ratio_5, ratio_6, ratio_7, ratio_8, ratio_9, ratio_10, ratio_11, ratio_12)
+
+	#ratio_50 = len([k for k, v in instance_info.items() if len(v['text_from_wikipedia'].split(' ')) < 500]) / len(instance_info.keys())
+	#ratio_100 = len([k for k, v in instance_info.items() if len(v['text_from_wikipedia'].split(' ')) < 1000]) / len(instance_info.keys())
+	#ratio_10 = len([k for k, v in instance_info.items() if len(v['text_from_wikipedia'].split(' ')) < 100]) / len(instance_info.keys())
+	#print(ratio_10, ratio_50, ratio_100)	
+	pdb.set_trace()
+	'''
+	'''
+	concept_info = data_bundle['concept_info']
+	instance_info = data_bundle['instance_info']
+
+	count = 0
+	for c, i in concept_info.items():
+		print('Concept {} Info {}'.format(c, i[:100]))
+		count += 1 
+		if (count == 10):
+			break
+
+	for c, i in instance_info.items():
+		print('Instance {} Info {}'.format(c, i['text'][:100]))
+		count += 1 
+		if (count == 20):
+			break 
+
+	pdb.set_trace()
+	'''
+
+
+
 	if arg.add_reverse_label:
 		num_labels = 3
 	else:
@@ -154,6 +199,7 @@ if __name__ == '__main__':
 		optimizer = torch.optim.AdamW(param_group)
 
 	hyperparams = {
+		'data': arg.data, 
 		'bert_lr': arg.bert_lr,
 		'model_lr': arg.model_lr,
 		'batch_size': arg.batch_size,
@@ -188,9 +234,6 @@ if __name__ == '__main__':
 	trainer = Trainer(data_bundle, model, tokenizer, optimizer, device, hyperparams)
 
 
-	#pdb.set_trace()
-	#ii = data_bundle['instance_info']
-	#pdb.set_trace()
 
 
 	if arg.test_link_prediction:
