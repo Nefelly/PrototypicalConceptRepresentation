@@ -1748,7 +1748,7 @@ class Trainer:
 			'id2con': self.id2con,
 			'id2ins': self.id2ins
 		}
-
+		
 		model.train()
 		with open('embeddings.pkl', 'wb') as fil:
 			pickle.dump(embeddings, fil)
