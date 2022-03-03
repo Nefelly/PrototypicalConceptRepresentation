@@ -154,6 +154,7 @@ if __name__ == '__main__':
 		optimizer = torch.optim.AdamW(param_group)
 
 	hyperparams = {
+		'data': arg.data,
 		'bert_lr': arg.bert_lr,
 		'model_lr': arg.model_lr,
 		'batch_size': arg.batch_size,

@@ -165,7 +165,10 @@ class Trainer:
 		if hyperparams['language'] == 'zh':
 			text_key = 'text'
 		else:
-			text_key = 'text_from_wikipedia'
+			if hyperparams['data'].startswith('wordnet'):
+				text_key = 'text'
+			else:
+				text_key = 'text_from_wikipedia'
 
 		model.eval()
 		with torch.no_grad():
@@ -232,9 +235,11 @@ class Trainer:
 		if hyperparams['language'] == 'zh':
 			text_key = 'text'
 			single_hint_template = '该物属于概念"{0}"。'
-
 		else:
-			text_key = 'text_from_wikipedia'
+			if hyperparams['data'].startswith('wordnet'):
+				text_key = 'text'
+			else:
+				text_key = 'text_from_wikipedia'
 			single_hint_template = 'This item belongs to concept "{0}". '
 
 
@@ -614,7 +619,10 @@ class Trainer:
 			single_hint_template = '该物属于概念"{0}"。'
 
 		else:
-			text_key = 'text_from_wikipedia'
+			if hyperparams['data'].startswith('wordnet'):
+				text_key = 'text'
+			else:
+				text_key = 'text_from_wikipedia'
 			single_hint_template = 'This item belongs to concept "{0}". '
 
 		concepts = self.data_bundle['concept_instance_info'].keys()
@@ -902,7 +910,10 @@ class Trainer:
 			single_hint_template = '该物属于概念"{0}"。'
 
 		else:
-			text_key = 'text_from_wikipedia'
+			if hyperparams['data'].startswith('wordnet'):
+				text_key = 'text'
+			else:
+				text_key = 'text_from_wikipedia'
 			single_hint_template = 'This item belongs to concept "{0}". ' 
 
 		concepts = self.data_bundle['concept_instance_info'].keys()
@@ -1587,7 +1598,10 @@ class Trainer:
 			single_hint_template = '该物属于概念"{0}"。'
 
 		else:
-			text_key = 'text_from_wikipedia'
+			if hyperparams['data'].startswith('wordnet'):
+				text_key = 'text'
+			else:
+				text_key = 'text_from_wikipedia'
 			single_hint_template = 'This item belongs to concept "{0}". '
 
 		concepts = self.concepts #data_bundle['concept_instance_info'].keys()
