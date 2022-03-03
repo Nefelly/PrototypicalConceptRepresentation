@@ -1301,11 +1301,15 @@ class Trainer:
 		#pair_mrr = {}
 		#pair_cnt = {}
 
-		#pdb.set_trace()
+		if valid: #hyperparams['variant'] == 'default' and valid:
+			rels = ['subclass']
+		else:
+			rels = ['subclass', 'instance'] 
+
 		with torch.no_grad():
 			# link prediction for subclass
 			for setting in ['raw', 'filter']:
-				for rel in ['subclass', 'instance']:
+				for rel in rels:
 					for target in ['head', 'tail']:
 						if rel == 'subclass':
 							givens = concepts 
