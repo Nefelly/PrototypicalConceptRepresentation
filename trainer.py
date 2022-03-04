@@ -703,7 +703,7 @@ class Trainer:
 
 				hyper_ents = sampler.sample_single(hyper, exclude_ins = hypo)
 				if (len(hyper_ents) == 0):
-					pdb.set_trace()
+					#pdb.set_trace()
 					continue
 				if hypo in concepts: # subclass
 					rel_type = 'subclass_selfatt'
