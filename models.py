@@ -223,7 +223,7 @@ class ProtSiam(nn.Module):
             output_attentions=output_attentions,
         )
 
-        if self.use_cls_token:
+        if self.use_cls_token or len(outputs) == 1:
             pooled_output = outputs[0][:, 0, :]
         else:
             pooled_output = outputs[1]
@@ -441,7 +441,7 @@ class ProtVanilla(nn.Module):
             output_attentions=output_attentions,
         )
 
-        if self.use_cls_token:
+        if self.use_cls_token or len(outputs) == 1:
             pooled_output = outputs[0][:, 0, :]
         else:
             pooled_output = outputs[1]
@@ -494,8 +494,7 @@ class ProtVanilla(nn.Module):
 
             
             predict_labels = tokenizer.convert_tokens_to_ids([tokens[p] for p in predict_positions])
-            if 0 in predict_labels:
-                pdb.set_trace()
+  
             predict_labels_list.append(predict_labels)
 
 

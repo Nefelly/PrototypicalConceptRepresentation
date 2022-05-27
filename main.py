@@ -3,13 +3,13 @@ import os
 import argparse
 from tqdm import tqdm
 import torch
-import pdb
+#import pdb
 import random
 import pickle
 import numpy as np
 
 from transformers import BertTokenizer, BertModel, BertConfig, BertForMaskedLM
-from transformers import AutoTokenizer, AutoModel, AutoConfig
+from transformers import AutoTokenizer, AutoModel, AutoConfig, AlbertForMaskedLM
 from models import ProtSiam, ProtVanilla
 from trainer import Trainer
 from utils import *
@@ -25,13 +25,13 @@ if __name__ == '__main__':
 	parser.add_argument('--no_use_gpu', action='store_true', default=False)
 	parser.add_argument('--weight_decay', type=float, default=1e-7)
 	parser.add_argument('--load_path', type=str, default=None)
-	parser.add_argument('--data', type=str, default='PB16IC', choices = ['PB16I', 'PB16IC']) # 16 for PB16I, 16_condesc for PB16IC
+	parser.add_argument('--data', type=str, default='PB16IC', choices = ['PB16I', 'PB16IC', 'WDTaxo', 'WNTaxo', 'CN-PBI', 'CN-PBIC']) 
 	parser.add_argument('--plm', type=str, default='bert', choices = ['bert', 'bert_tiny', 'bert_mini', 'bert_small'])
 	parser.add_argument('--model', type=str, default='psn', choices= ['prot_vanilla', 'psn'])
 	parser.add_argument('--ent_per_con', type=int, default=4, help='eta, each triple samples at most 2*eta instances')
 	parser.add_argument('--typicalness', type=str, default='none', choices = ['none']) 
 	parser.add_argument('--add_reverse_label', default=False, action = 'store_true', help='transformer binary classification to trinary classification: x_isA_y, y_isA_x or not related')
-	parser.add_argument('--language', type=str, default='en', choices = ['zh', 'en'])
+	#parser.add_argument('--language', type=str, default='en', choices = ['zh', 'en'])
 	parser.add_argument('--con_desc', default=False, action = 'store_true', help = 'use description of concept') 
 	parser.add_argument('--use_probase_text', default=False, action = 'store_true')
 	parser.add_argument('--train_instance_of', default=False, action = 'store_true')
@@ -61,17 +61,23 @@ if __name__ == '__main__':
 	else:
 		device = torch.device('cpu')
 
-		
+	if arg.data in ['CN-PBI', 'CN-PBIC']:
+		arg.language = 'zh'
+	else:
+		arg.language = 'en'
 
-	data_path = '../data/v2_en/{0}'.format(arg.data)
+
+	data_path = './data/{0}'.format(arg.data)
 	data_bundle = load_data(data_path)
 
 
-	identifier = 'en_{0}'.format(arg.data)
+	identifier = '{}_{}'.format(arg.language, arg.data)
 
 	print('Data path: ', data_path)
 
-	if arg.plm == 'bert':
+	if arg.language == 'zh':
+		bert_pretrained = 'voidful/albert_chinese_tiny'
+	elif arg.plm == 'bert':
 		bert_pretrained = "bert-base-uncased"
 	elif arg.plm == 'bert_tiny':
 		bert_pretrained = "prajjwal1/bert-tiny"
@@ -89,6 +95,7 @@ if __name__ == '__main__':
 	tokenizer = AutoTokenizer.from_pretrained(bert_pretrained)
 	bertmodel = AutoModel.from_pretrained(bert_pretrained)
 	
+
 	if arg.train_MLM:
 		bertMLMcls = BertForMaskedLM(bertmodel.config).cls
 	else:
@@ -132,6 +139,9 @@ if __name__ == '__main__':
 		optimizer = torch.optim.AdamW(param_group)
 
 	hyperparams = {
+		'data': arg.data, 
+		'bert_lr': arg.bert_lr,
+		'model_lr': arg.model_lr,
 		'batch_size': arg.batch_size,
 		'epoch': arg.epoch,
 		'model_name': arg.model,

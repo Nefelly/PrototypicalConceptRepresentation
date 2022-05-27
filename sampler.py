@@ -36,9 +36,11 @@ class Sampler:
 
 		concept_entity_info = self.concept_entity_info
 		instance_info = self.instance_info
-		
-		ents1 = [ instance_info[ins] for ins in concept_entity_info[con1] ]
-		ents2 = [ instance_info[ins] for ins in concept_entity_info[con2] ]
+		try:
+			ents1 = [ instance_info[ins] for ins in concept_entity_info[con1] ]
+			ents2 = [ instance_info[ins] for ins in concept_entity_info[con2] ]
+		except:
+			pdb.set_trace()
 
 		if len(ents1) < ent_per_con:
 			num1 = len(ents1)

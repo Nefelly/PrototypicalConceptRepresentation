@@ -149,22 +149,23 @@ def load_data(folder_path):
 	if os.path.exists(folder_path + '/description_concepts.txt'):
 		with open(folder_path + '/description_concepts.txt', 'r') as f:
 			for line in f.readlines():
-				assert len(line.split('\t')) == 2
-				item, desc = line.split('\t')
+				item, desc = line.split('\t', 1)
 				concept_info[item] = desc
 	else:
 		concept_info = None
 
 	with open(folder_path + '/description_instances.txt', 'r') as f:
 		for line in f.readlines():
-			assert len(line.split('\t')) == 2
-			item, desc = line.split('\t')
-			instance_info[item] = { 'ins_name': item, 'text_from_wikipedia': desc}
+			item, desc = line.split('\t', 1)
+			instance_info[item] = { 'ins_name': item, 'text': desc}
 
 	with open(folder_path + '/instances_of_concepts.txt', 'r') as f:
 		for line in f.readlines():
-			con, insts = line.split('\t')
-			insts = insts.split(',')[:-1]
+			con, insts = line.split('\t', 1)
+			if 'CN-PB' in folder_path:
+				insts = insts.split('\t')[:-1]
+			else:
+				insts = insts.split(',')[:-1]
 			concept_instance_info[con] = insts 
 
 	with open(folder_path + '/subclass_all.txt', 'r') as f:
