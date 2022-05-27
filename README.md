@@ -18,7 +18,7 @@ Run main.py to train or test Prototypical Siamese Network (PSN).
 An example for training:
 
 ```bash
-python main.py --train_instance_of --plm bert_tiny --data 16_condesc --type_constrain
+python main.py --train_instance_of --plm bert_tiny --data PB16IC --type_constrain
 ```
 
 The arguments are as following:
@@ -27,8 +27,8 @@ The arguments are as following:
 * `--batch_size`: batch size used in training.
 * `--weight_decay`: weight dacay rate used in training.
 * `--load_path`: path of PSN checkpoint to load.
-* `--data`: name of the dataset, either 'PB16I' or 'PB16IC'.
-* `--plm`: choice of BERT of different size. Choose from 'bert', 'bert_tiny', 'bert_mini' and 'bert_small'.
+* `--data`: name of the dataset, choose from ['PB16I', 'PB16IC', 'WDTaxo', 'WNTaxo', 'CN-PBI', 'CN-PBIC'].
+* `--plm`: choice of BERT of different size. Choose from 'bert', 'bert_tiny', 'bert_mini' and 'bert_small'. For dataset CN-PBI or CN-PBIC, 'albert_chinese_tiny' will be used.
 * `--model`: name of the model. Use 'psn' for Prototypical Siamese Network, or 'prot_vanilla' for a model with vanilla prototype.
 * `--ent_per_con`: the hyperparameter $\eta$, default to 4. Each triple samples at most $2*\eta$ instances.
 * `--con_desc`: use descriptions of concepts for representation. Only suitable for PB16IC.
