@@ -45,7 +45,7 @@ The arguments are as following:
 
 ### Datasets
 
-The datasets are put in the folder PB16I or PB16IC, including concepts, instances, isSubclassOf triples, isInstanceOf triples, textual descriptions of instances.
+The datasets are available at https://drive.google.com/file/d/1_UF7n6wnftGrWG17iLOOOSn-FKyJuivJ/view?usp=sharing, including concepts, instances, isSubclassOf triples, isInstanceOf triples, textual descriptions of instances.
 
 ### Representations of Concepts and Instances
 
